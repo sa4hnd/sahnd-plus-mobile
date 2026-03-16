@@ -55,7 +55,7 @@ export default function TVDetailScreen() {
 
   const playEpisode = (ep: Episode) => {
     Haptics.selectionAsync();
-    addToHistory({ id: show.id, type: 'tv', title, poster_path: show.poster_path, backdrop_path: show.backdrop_path, vote_average: show.vote_average, season: ep.season_number, episode: ep.episode_number });
+    addToHistory({ id: show.id, type: 'tv', title, poster_path: show.poster_path, backdrop_path: show.backdrop_path, vote_average: show.vote_average, overview: show.overview || '', season: ep.season_number, episode: ep.episode_number });
     router.push(`/watch/${show.id}?type=tv&s=${ep.season_number}&e=${ep.episode_number}` as any);
   };
 

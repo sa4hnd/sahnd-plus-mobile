@@ -71,9 +71,11 @@ export interface WatchHistoryItem {
   poster_path: string | null;
   backdrop_path: string | null;
   vote_average: number;
+  overview: string;
   season?: number;
   episode?: number;
   timestamp: number;
+  progress: number;
   completed: boolean;
 }
 
