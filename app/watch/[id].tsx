@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, SkipForward, Check } from 'lucide-react-native';
+import SahndPlayer from '@/components/SahndPlayer';
 import { fetchStream } from '@/lib/streamApi';
-import { addToHistory, markWatched, updateProgress, isWatched as checkWatched } from '@/lib/storage';
+import { addToHistory, markWatched, updateProgress, isWatched as checkWatched, getProgress } from '@/lib/storage';
 import { movieDetail, tvDetail, seasonDetail, img } from '@/lib/tmdb';
 import { Colors, Radius } from '@/lib/theme';
 import { MovieDetail, Episode } from '@/types';
@@ -29,30 +29,19 @@ export default function WatchScreen() {
   const [useWebView, setUseWebView] = useState(false);
   const [streamError, setStreamError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [elapsed, setElapsed] = useState(0);
   const [autoNext, setAutoNext] = useState(true);
-  const [showNextOverlay, setShowNextOverlay] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const [savedPosition, setSavedPosition] = useState(0); // resume seconds
 
   const title = detail?.title || detail?.name || '';
   const currentEp = episodes.find(ep => ep.episode_number === episode);
   const nextEp = episodes.find(ep => ep.episode_number === (episode || 0) + 1);
   const runtime = currentEp?.runtime || detail?.runtime || 45;
-  const runtimeSec = runtime * 60;
-  const progressPct = runtimeSec > 0 ? Math.min((elapsed / runtimeSec) * 100, 100) : 0;
-
-  // Native video player
-  const player = useVideoPlayer(streamUrl || '', (p) => {
-    p.loop = false;
-    if (streamUrl) p.play();
-  });
 
   useEffect(() => {
     setLoading(true);
     setStreamError('');
     setStreamUrl(null);
-    setElapsed(0);
-    setShowNextOverlay(false);
+    setUseWebView(false);
 
     const load = async () => {
       try {
@@ -83,6 +72,13 @@ export default function WatchScreen() {
           } catch {}
         }
 
+        // Get saved position for resume
+        const savedPct = await getProgress(tmdbId, mediaType, season, episode);
+        if (savedPct > 0 && savedPct < 95) {
+          const runtimeSec = (currentEp?.runtime || d.runtime || 45) * 60;
+          setSavedPosition(Math.floor((savedPct / 100) * runtimeSec));
+        }
+
         // Fetch native stream URL
         const stream = await fetchStream(mediaType, tmdbId, season, episode);
         console.log('[Watch] Got native stream:', stream.m3u8.slice(0, 60));
@@ -95,34 +91,20 @@ export default function WatchScreen() {
       }
     };
     load();
-
-    // Elapsed timer for progress
-    timerRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [tmdbId, mediaType, season, episode]);
 
-  // Save progress every 30s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (runtimeSec > 0 && elapsed > 0) {
-        const pct = Math.min(Math.round((elapsed / runtimeSec) * 100), 100);
-        updateProgress(tmdbId, mediaType, pct, season, episode);
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [elapsed, runtimeSec]);
+  // Player callbacks
+  const handlePlayerProgress = (seconds: number, dur: number) => {
+    if (dur > 0) {
+      const pct = Math.min(Math.round((seconds / dur) * 100), 100);
+      updateProgress(tmdbId, mediaType, pct, season, episode);
+    }
+  };
 
-  // Auto-next
-  useEffect(() => {
-    if (!autoNext || !nextEp || runtimeSec <= 0) return;
-    if (runtimeSec - elapsed <= 120 && runtimeSec - elapsed > 0 && !showNextOverlay) {
-      setShowNextOverlay(true);
-    }
-    if (elapsed >= runtimeSec) {
-      markWatched(tmdbId, mediaType, season, episode);
-      if (autoNext && nextEp) goToEp(nextEp);
-    }
-  }, [elapsed]);
+  const handlePlayerComplete = () => {
+    markWatched(tmdbId, mediaType, season, episode);
+    if (autoNext && nextEp) goToEp(nextEp);
+  };
 
   const goToEp = (ep: Episode) => {
     Haptics.selectionAsync();
@@ -159,21 +141,27 @@ export default function WatchScreen() {
       </View>
 
       {/* ─── PLAYER ─── */}
-      <View style={s.playerWrap}>
-        {loading ? (
+      {loading ? (
+        <View style={s.playerWrap}>
           <View style={s.playerOverlay}>
             <ActivityIndicator color="#fff" size="large" />
             <Text style={s.playerText}>Loading stream...</Text>
           </View>
-        ) : streamUrl && !useWebView ? (
-          <VideoView
-            player={player}
-            style={s.nativePlayer}
-            allowsFullscreen
-            allowsPictureInPicture
-            nativeControls
-          />
-        ) : useWebView ? (
+        </View>
+      ) : streamUrl && !useWebView ? (
+        <SahndPlayer
+          uri={streamUrl}
+          title={title}
+          subtitle={season && episode ? `S${season} · E${episode}${currentEp ? ` · ${currentEp.name}` : ''}` : undefined}
+          startAt={savedPosition}
+          onProgress={handlePlayerProgress}
+          onComplete={handlePlayerComplete}
+          onBack={() => router.back()}
+          onNextEpisode={nextEp ? () => goToEp(nextEp) : undefined}
+          hasNextEpisode={!!nextEp}
+        />
+      ) : useWebView ? (
+        <View style={s.playerWrap}>
           <WebView
             source={{ uri: getEmbedUrl() }}
             style={{ flex: 1, backgroundColor: '#000' }}
@@ -181,55 +169,27 @@ export default function WatchScreen() {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             javaScriptEnabled
-            injectedJavaScript={`
-              window.open = function() { return null; };
-              setInterval(function() {
-                document.querySelectorAll('a[target="_blank"]').forEach(function(el) { el.remove(); });
-                document.querySelectorAll('div').forEach(function(el) {
-                  var z = parseInt(window.getComputedStyle(el).zIndex || 0);
-                  if (z > 999 && !el.querySelector('video')) el.style.display = 'none';
-                });
-              }, 1500);
-              true;
-            `}
-            onShouldStartLoadWithRequest={(req) => {
-              const embedHost = new URL(getEmbedUrl()).hostname;
-              return req.url.includes(embedHost) || req.url === getEmbedUrl();
-            }}
+            injectedJavaScript={`window.open=function(){return null};setInterval(function(){document.querySelectorAll('a[target="_blank"]').forEach(function(e){e.remove()})},1500);true;`}
+            onShouldStartLoadWithRequest={(req) => req.url.includes(new URL(getEmbedUrl()).hostname)}
           />
-        ) : (
+        </View>
+      ) : (
+        <View style={s.playerWrap}>
           <View style={s.playerOverlay}>
-            <Text style={[s.playerText, { color: Colors.accent, fontSize: 14 }]}>Native stream unavailable</Text>
+            <Text style={[s.playerText, { color: Colors.accent, fontSize: 14 }]}>Stream unavailable</Text>
             <Text style={[s.playerText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
               <Pressable onPress={() => setUseWebView(true)} style={s.retryBtn}>
                 <Text style={s.retryText}>Use Embedded Player</Text>
               </Pressable>
               <Pressable onPress={() => { setLoading(true); setStreamError(''); fetchStream(mediaType, tmdbId, season, episode).then(r => { setStreamUrl(r.m3u8); setLoading(false); }).catch(e => { setStreamError(e.message); setLoading(false); }); }} style={[s.retryBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
-                <Text style={s.retryText}>Retry Native</Text>
+                <Text style={s.retryText}>Retry</Text>
               </Pressable>
             </View>
           </View>
-        )}
+        </View>
+      )}
 
-        {/* Progress bar at bottom */}
-        {runtimeSec > 0 && (
-          <View style={s.progressBar}>
-            <View style={[s.progressFill, { width: `${progressPct}%` }]} />
-          </View>
-        )}
-
-        {/* Next episode overlay */}
-        {showNextOverlay && nextEp && (
-          <View style={s.nextOverlay}>
-            <Text style={s.nextLabel}>UP NEXT</Text>
-            <Text style={s.nextTitle} numberOfLines={1}>E{nextEp.episode_number} · {nextEp.name}</Text>
-            <View style={s.nextBtns}>
-              <Pressable onPress={() => goToEp(nextEp)} style={s.nextPlayBtn}><Text style={s.nextPlayText}>Play Next</Text></Pressable>
-              <Pressable onPress={() => setShowNextOverlay(false)} style={s.nextCancelBtn}><Text style={{ color: '#fff', fontSize: 12 }}>Cancel</Text></Pressable>
-            </View>
-          </View>
-        )}
       </View>
 
       {/* Content below player */}

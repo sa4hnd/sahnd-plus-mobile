@@ -34,7 +34,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-video"
+      "expo-video",
+      "react-native-video"
     ],
     "experiments": {
       "typedRoutes": true
