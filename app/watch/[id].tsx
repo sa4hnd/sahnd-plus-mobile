@@ -190,8 +190,6 @@ export default function WatchScreen() {
         </View>
       )}
 
-      </View>
-
       {/* Content below player */}
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* Info */}
