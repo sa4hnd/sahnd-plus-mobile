@@ -1,25 +1,31 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Platform } from 'react-native';
 
 export default function TabLayout() {
   return (
     <NativeTabs
-      minimizeBehavior="onScrollDown"
+      tintColor="#E50914"
+      {...(Platform.OS === 'ios' ? { translucent: true } : {})}
     >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        <Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="movies">
-        <NativeTabs.Trigger.Icon sf={{ default: 'film', selected: 'film.fill' }} md="movie" />
-        <NativeTabs.Trigger.Label>Movies</NativeTabs.Trigger.Label>
+        <Icon sf={{ default: 'film', selected: 'film.fill' }} />
+        <Label>Movies</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="series">
-        <NativeTabs.Trigger.Icon sf={{ default: 'tv', selected: 'tv.fill' }} md="live_tv" />
-        <NativeTabs.Trigger.Label>Series</NativeTabs.Trigger.Label>
+        <Icon sf={{ default: 'play.tv', selected: 'play.tv.fill' }} />
+        <Label>Series</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="search">
+        <Icon sf="magnifyingglass" />
+        <Label>Search</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="mylist">
-        <NativeTabs.Trigger.Icon sf={{ default: 'bookmark', selected: 'bookmark.fill' }} md="bookmark" />
-        <NativeTabs.Trigger.Label>My List</NativeTabs.Trigger.Label>
+        <Icon sf={{ default: 'bookmark', selected: 'bookmark.fill' }} />
+        <Label>My List</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

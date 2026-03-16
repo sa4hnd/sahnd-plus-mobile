@@ -1,121 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Text } from 'react-native';
 import { Stack } from 'expo-router';
+import { popularMovies, topRatedMovies, nowPlayingMovies, upcomingMovies } from '@/lib/tmdb';
 import { Colors, Spacing } from '@/lib/theme';
-import {
-  popularMovies,
-  topRatedMovies,
-  nowPlayingMovies,
-  upcomingMovies,
-} from '@/lib/tmdb';
 import ContentRow from '@/components/ContentRow';
 import { Movie } from '@/types';
 
-export default function MoviesScreen() {
+export default function MoviesTab() {
+  const [data, setData] = useState<Record<string, Movie[]>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [popular, setPopular] = useState<Movie[]>([]);
-  const [topRated, setTopRated] = useState<Movie[]>([]);
-  const [nowPlaying, setNowPlaying] = useState<Movie[]>([]);
-  const [upcoming, setUpcoming] = useState<Movie[]>([]);
 
-  const fetchData = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const [popRes, trRes, npRes, upRes] = await Promise.all([
-        popularMovies(),
-        topRatedMovies(),
-        nowPlayingMovies(),
-        upcomingMovies(),
-      ]);
-
-      setPopular(popRes.results ?? []);
-      setTopRated(trRes.results ?? []);
-      setNowPlaying(npRes.results ?? []);
-      setUpcoming(upRes.results ?? []);
-    } catch (err) {
-      console.error('Movies fetch error:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const [p, t, n, u] = await Promise.all([popularMovies(), topRatedMovies(), nowPlayingMovies(), upcomingMovies()]);
+      setData({ popular: p.results, topRated: t.results, nowPlaying: n.results, upcoming: u.results });
+    } catch (e) { console.error(e); }
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { load(); }, [load]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-  }, [fetchData]);
-
-  if (loading) {
-    return (
-      <View style={styles.loader}>
-        <Stack.Screen
-          options={{
-            title: 'Movies',
-            headerStyle: { backgroundColor: Colors.bg },
-            headerTintColor: Colors.text,
-            headerLargeTitle: true,
-            headerLargeTitleStyle: { color: Colors.text },
-            headerShadowVisible: false,
-          }}
-        />
-        <ActivityIndicator size="large" color={Colors.accent} />
-      </View>
-    );
-  }
+  if (loading) return <View style={st.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
 
   return (
-    <View style={styles.screen}>
-      <Stack.Screen
-        options={{
-          title: 'Movies',
-          headerStyle: { backgroundColor: Colors.bg },
-          headerTintColor: Colors.text,
-          headerLargeTitle: true,
-          headerLargeTitleStyle: { color: Colors.text },
-          headerShadowVisible: false,
-        }}
-      />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />
-        }
-      >
-        <View style={styles.sections}>
-          <ContentRow title="Popular" data={popular} type="movie" />
-          <ContentRow title="Top Rated" data={topRated} type="movie" />
-          <ContentRow title="Now Playing" data={nowPlaying} type="movie" />
-          <ContentRow title="Upcoming" data={upcoming} type="movie" />
-        </View>
-
-        <View style={{ height: 80 }} />
+    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+      <Stack.Screen options={{ headerShown: true, title: 'Movies', headerStyle: { backgroundColor: Colors.bg }, headerTintColor: '#fff', headerLargeTitle: true }} />
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.accent} />} showsVerticalScrollIndicator={false}>
+        <ContentRow title="Popular" data={data.popular || []} type="movie" />
+        <ContentRow title="Now Playing" data={data.nowPlaying || []} type="movie" />
+        <ContentRow title="Top Rated" data={data.topRated || []} type="movie" />
+        <ContentRow title="Coming Soon" data={data.upcoming || []} type="movie" />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
-  loader: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sections: {
-    paddingTop: Spacing.md,
-  },
+const st = StyleSheet.create({
+  center: { flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center' },
 });

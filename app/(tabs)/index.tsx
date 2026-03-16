@@ -1,224 +1,92 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
-  Pressable,
-  Dimensions,
-  FlatList,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Colors, Spacing } from '@/lib/theme';
-import {
-  trending,
-  popularMovies,
-  nowPlayingMovies,
-  popularTV,
-  topRatedTV,
-  img,
-} from '@/lib/tmdb';
+import { trending, popularMovies, topRatedMovies, nowPlayingMovies, popularTV, topRatedTV } from '@/lib/tmdb';
 import { getContinueWatching } from '@/lib/storage';
+import { Colors, Spacing } from '@/lib/theme';
 import ContentRow from '@/components/ContentRow';
 import HeroBanner from '@/components/HeroBanner';
 import { Movie, WatchHistoryItem } from '@/types';
 
-const { width: SCREEN } = Dimensions.get('window');
-const CW_CARD_W = SCREEN * 0.42;
-const CW_CARD_H = CW_CARD_W * 0.56;
-
 export default function HomeScreen() {
   const router = useRouter();
+  const [data, setData] = useState<Record<string, Movie[]>>({});
+  const [continueItems, setContinueItems] = useState<WatchHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [trendingData, setTrendingData] = useState<Movie[]>([]);
-  const [popular, setPopular] = useState<Movie[]>([]);
-  const [nowPlaying, setNowPlaying] = useState<Movie[]>([]);
-  const [tvPopular, setTvPopular] = useState<Movie[]>([]);
-  const [tvTopRated, setTvTopRated] = useState<Movie[]>([]);
-  const [continueWatching, setContinueWatching] = useState<WatchHistoryItem[]>([]);
 
-  const fetchData = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const [trendRes, popRes, npRes, tvPopRes, tvTrRes, cwRes] = await Promise.all([
-        trending('week'),
-        popularMovies(),
-        nowPlayingMovies(),
-        popularTV(),
-        topRatedTV(),
-        getContinueWatching(),
+      const [t, pm, tr, np, pt, tt] = await Promise.all([
+        trending(), popularMovies(), topRatedMovies(), nowPlayingMovies(), popularTV(), topRatedTV()
       ]);
-
-      setTrendingData(trendRes.results ?? []);
-      setPopular(popRes.results ?? []);
-      setNowPlaying(npRes.results ?? []);
-      setTvPopular(tvPopRes.results ?? []);
-      setTvTopRated(tvTrRes.results ?? []);
-      setContinueWatching(cwRes);
-    } catch (err) {
-      console.error('Home fetch error:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      setData({ trending: t.results, popular: pm.results, topRated: tr.results, nowPlaying: np.results, popularTv: pt.results, topRatedTv: tt.results });
+      setContinueItems(await getContinueWatching());
+    } catch (e) { console.error(e); }
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { load(); }, [load]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-  }, [fetchData]);
+  if (loading) return <View style={st.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
 
-  if (loading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={Colors.accent} />
-      </View>
-    );
-  }
-
-  const heroItem = trendingData[0];
+  const hero = data.trending?.[0];
 
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />
-        }
-      >
-        {/* Logo */}
-        <SafeAreaView edges={['top']} style={styles.logoContainer}>
-          <Image
-            source={require('@/assets/logo.png')}
-            style={styles.logo}
-            contentFit="contain"
-          />
-        </SafeAreaView>
+    <ScrollView style={st.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.accent} />} showsVerticalScrollIndicator={false}>
+      {/* Logo + search */}
+      <View style={st.logoBar}>
+        <Image source={require('@/assets/logo.png')} style={st.logo} contentFit="contain" />
+        <Pressable onPress={() => router.push('/search' as any)} style={st.searchBtn}>
+          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '300' }}>⌕</Text>
+        </Pressable>
+      </View>
 
-        {/* Hero */}
-        {heroItem && <HeroBanner movie={heroItem} />}
+      {hero && <HeroBanner movie={hero} />}
 
-        <View style={styles.sections}>
-          {/* Continue Watching */}
-          {continueWatching.length > 0 && (
-            <View style={styles.cwSection}>
-              <Text style={styles.sectionTitle}>Continue Watching</Text>
-              <FlatList
-                data={continueWatching}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: Spacing.sm }}
-                keyExtractor={(item) => `cw-${item.id}-${item.type}`}
-                renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => router.push(`/${item.type}/${item.id}` as any)}
-                    style={({ pressed }) => [
-                      styles.cwCard,
-                      pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
-                    ]}
-                  >
-                    <Image
-                      source={{ uri: img(item.backdrop_path || item.poster_path, 'w500')! }}
-                      style={styles.cwImage}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                    <View style={styles.cwOverlay}>
-                      <Text style={styles.cwTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      {item.season != null && item.episode != null && (
-                        <Text style={styles.cwMeta}>
-                          S{item.season} E{item.episode}
-                        </Text>
-                      )}
-                    </View>
-                  </Pressable>
+      {/* Continue Watching */}
+      {continueItems.length > 0 && (
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={st.secTitle}>Continue Watching</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
+            {continueItems.map(item => (
+              <Pressable
+                key={`${item.type}-${item.id}-${item.season}-${item.episode}`}
+                onPress={() => router.push((item.type === 'tv' && item.season && item.episode ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}` : `/watch/${item.id}?type=${item.type}`) as any)}
+                style={{ width: 120, borderRadius: 12, overflow: 'hidden' }}
+              >
+                <Image source={{ uri: `https://image.tmdb.org/t/p/w342${item.poster_path}` }} style={{ width: 120, height: 180, borderRadius: 12 }} contentFit="cover" />
+                {item.type === 'tv' && item.season && item.episode && (
+                  <View style={st.cwBadge}><Text style={st.cwBadgeT}>S{item.season} E{item.episode}</Text></View>
                 )}
-              />
-            </View>
-          )}
-
-          {/* Content rows */}
-          <ContentRow title="Trending This Week" data={trendingData.slice(1)} />
-          <ContentRow title="Popular Movies" data={popular} type="movie" />
-          <ContentRow title="Now Playing" data={nowPlaying} type="movie" />
-          <ContentRow title="Popular TV Shows" data={tvPopular} type="tv" />
-          <ContentRow title="Top Rated TV" data={tvTopRated} type="tv" />
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
+      )}
 
-        <View style={{ height: 80 }} />
-      </ScrollView>
-    </View>
+      <View style={{ marginTop: Spacing.lg }}>
+        <ContentRow title="Trending" data={data.trending?.slice(1) || []} />
+        <ContentRow title="Popular Movies" data={data.popular || []} type="movie" />
+        <ContentRow title="Now Playing" data={data.nowPlaying || []} type="movie" />
+        <ContentRow title="Top Rated" data={data.topRated || []} type="movie" />
+        <ContentRow title="Popular Series" data={data.popularTv || []} type="tv" />
+        <ContentRow title="Top Rated Series" data={data.topRatedTv || []} type="tv" />
+      </View>
+      <View style={{ height: 100 }} />
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
-  loader: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    alignItems: 'center',
-    paddingTop: Spacing.xs,
-  },
-  logo: {
-    width: 120,
-    height: 40,
-  },
-  sections: {
-    marginTop: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  cwSection: {
-    marginBottom: Spacing.lg,
-  },
-  cwCard: {
-    width: CW_CARD_W,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: Colors.elevated,
-  },
-  cwImage: {
-    width: CW_CARD_W,
-    height: CW_CARD_H,
-  },
-  cwOverlay: {
-    padding: Spacing.sm,
-  },
-  cwTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  cwMeta: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
+const st = StyleSheet.create({
+  center: { flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center' },
+  scroll: { flex: 1, backgroundColor: Colors.bg },
+  logoBar: { position: 'absolute', top: 54, left: 16, right: 16, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logo: { width: 120, height: 32 },
+  searchBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  secTitle: { fontSize: 20, fontWeight: '700', color: Colors.text, paddingHorizontal: 16, marginBottom: 8 },
+  cwBadge: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  cwBadgeT: { color: '#fff', fontSize: 10, fontWeight: '600' },
 });
