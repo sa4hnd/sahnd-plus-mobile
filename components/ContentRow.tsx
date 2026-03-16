@@ -1,15 +1,14 @@
-import { View, Text, Pressable, FlatList, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Pressable, FlatList, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Movie } from '@/types';
 import { img } from '@/lib/tmdb';
-import { Colors, Radius, Spacing } from '@/lib/theme';
-import { memo, useRef } from 'react';
+import { C, S, R, Layout, T } from '@/lib/design';
+import { memo } from 'react';
 
-const { width: SCREEN } = Dimensions.get('window');
-const CARD_W = SCREEN * 0.38;
-const CARD_H = CARD_W * 1.5;
+const CARD_W = Layout.carouselW;
+const CARD_H = Layout.carouselH;
 
 interface Props {
   title: string;
@@ -23,22 +22,19 @@ const Card = memo(({ item, type }: { item: Movie; type: string }) => {
 
   return (
     <Pressable
-      onPress={() => {
-        Haptics.selectionAsync();
-        router.push(`/${mediaType}/${item.id}` as any);
-      }}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+      onPress={() => { Haptics.selectionAsync(); router.push(`/${mediaType}/${item.id}` as any); }}
+      style={({ pressed }) => [st.card, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
     >
       <Image
         source={{ uri: img(item.poster_path, 'w342')! }}
-        style={styles.poster}
+        style={st.poster}
         contentFit="cover"
         transition={200}
-        recyclingKey={`poster-${item.id}`}
+        recyclingKey={`p-${item.id}`}
       />
       {item.vote_average > 0 && (
-        <View style={styles.rating}>
-          <Text style={styles.ratingText}>★ {item.vote_average.toFixed(1)}</Text>
+        <View style={st.ratingBadge}>
+          <Text style={st.ratingText}>★ {item.vote_average.toFixed(1)}</Text>
         </View>
       )}
     </Pressable>
@@ -46,59 +42,34 @@ const Card = memo(({ item, type }: { item: Movie; type: string }) => {
 });
 
 export default function ContentRow({ title, data, type }: Props) {
-  const listRef = useRef<FlatList>(null);
   if (!data?.length) return null;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
+    <View style={st.container}>
+      <Text style={st.title}>{title}</Text>
       <FlatList
-        ref={listRef}
         data={data}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: Spacing.sm }}
+        contentContainerStyle={{ paddingHorizontal: S.screen, gap: S.sm + 2 }}
         keyExtractor={i => `${i.id}`}
         renderItem={({ item }) => <Card item={item} type={type || ''} />}
-        snapToInterval={CARD_W + Spacing.sm}
+        snapToInterval={CARD_W + S.sm + 2}
         decelerationRate="fast"
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { marginBottom: Spacing.lg },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
+const st = StyleSheet.create({
+  container: { marginBottom: S.lg + 4 },
+  title: { ...T.h2, paddingHorizontal: S.screen, marginBottom: S.sm + 2 },
+  card: { width: CARD_W, borderRadius: R.lg, overflow: 'hidden', backgroundColor: C.card },
+  poster: { width: CARD_W, height: CARD_H, borderRadius: R.lg },
+  ratingBadge: {
+    position: 'absolute', top: S.sm, right: S.sm,
+    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: R.sm,
+    paddingHorizontal: 6, paddingVertical: 2,
   },
-  card: {
-    width: CARD_W,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: Colors.elevated,
-  },
-  poster: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: Radius.lg,
-  },
-  rating: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  ratingText: {
-    color: Colors.yellow,
-    fontSize: 11,
-    fontWeight: '700',
-  },
+  ratingText: { color: C.yellow, ...T.badge },
 });

@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Dimensions } from 'react-native';
+import {
+  View, Text, ScrollView, RefreshControl, ActivityIndicator,
+  StyleSheet, Pressable,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Search, Bell } from 'lucide-react-native';
-import { trending, popularMovies, topRatedMovies, nowPlayingMovies, popularTV, topRatedTV } from '@/lib/tmdb';
+import { Search } from 'lucide-react-native';
+import {
+  trending, popularMovies, topRatedMovies,
+  nowPlayingMovies, popularTV, topRatedTV, img,
+} from '@/lib/tmdb';
 import { getContinueWatching, getLastWatched } from '@/lib/storage';
-import { Colors, Spacing, Radius } from '@/lib/theme';
+import { C, S, R, Layout, T } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
 import { Movie, WatchHistoryItem } from '@/types';
-
-const { width: W, height: H } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -24,108 +28,177 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     try {
       const [t, pm, tr, np, pt, tt] = await Promise.all([
-        trending(), popularMovies(), topRatedMovies(), nowPlayingMovies(), popularTV(), topRatedTV()
+        trending(), popularMovies(), topRatedMovies(),
+        nowPlayingMovies(), popularTV(), topRatedTV(),
       ]);
-      setData({ trending: t.results, popular: pm.results, topRated: tr.results, nowPlaying: np.results, popularTv: pt.results, topRatedTv: tt.results });
-    } catch (e) { console.error(e); }
+      setData({
+        trending: t.results,
+        popular: pm.results,
+        topRated: tr.results,
+        nowPlaying: np.results,
+        popularTv: pt.results,
+        topRatedTv: tt.results,
+      });
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
     setRefreshing(false);
   }, []);
 
-  // Reload continue watching + last watched on focus
-  useFocusEffect(useCallback(() => {
-    getContinueWatching().then(setContinueItems);
-    getLastWatched().then(setLastWatched);
-  }, []));
+  useFocusEffect(
+    useCallback(() => {
+      getContinueWatching().then(setContinueItems);
+      getLastWatched().then(setLastWatched);
+    }, []),
+  );
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <View style={s.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
+  if (loading) {
+    return (
+      <View style={st.center}>
+        <ActivityIndicator color={C.accent} size="large" />
+      </View>
+    );
+  }
 
   // Hero: last watched or first trending
   const heroItem = lastWatched || data.trending?.[0];
-  const heroTitle = heroItem ? ('title' in heroItem ? heroItem.title : heroItem?.title) || '' : '';
-  const heroType = heroItem ? (heroItem.type === 'tv' || ('first_air_date' in heroItem && heroItem.first_air_date) ? 'tv' : 'movie') : 'movie';
-  const heroBg = heroItem?.backdrop_path ? `https://image.tmdb.org/t/p/original${heroItem.backdrop_path}` : null;
+  const heroTitle = heroItem
+    ? ('title' in heroItem ? heroItem.title : heroItem?.title) || ''
+    : '';
+  const heroType = heroItem
+    ? heroItem.type === 'tv' || ('first_air_date' in heroItem && heroItem.first_air_date)
+      ? 'tv'
+      : 'movie'
+    : 'movie';
+  const heroBg = heroItem?.backdrop_path
+    ? `https://image.tmdb.org/t/p/original${heroItem.backdrop_path}`
+    : null;
   const heroIsResume = lastWatched && !lastWatched.completed && lastWatched.progress > 0;
   const heroWatchUrl = lastWatched
-    ? (lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
+    ? lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
       ? `/watch/${lastWatched.id}?type=tv&s=${lastWatched.season}&e=${lastWatched.episode}`
-      : `/watch/${lastWatched.id}?type=${lastWatched.type}`)
+      : `/watch/${lastWatched.id}?type=${lastWatched.type}`
     : heroItem
       ? `/watch/${heroItem.id}?type=${heroType}`
       : '/';
 
   return (
     <ScrollView
-      style={s.root}
+      style={st.root}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.accent} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); load(); }}
+          tintColor={C.accent}
+        />
+      }
     >
       {/* ── Hero Banner ── */}
-      <View style={s.hero}>
-        {heroBg && <Image source={{ uri: heroBg }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} />}
-        <LinearGradient colors={['rgba(10,10,10,0.3)', 'transparent', 'rgba(10,10,10,0.7)', Colors.bg]} locations={[0, 0.3, 0.7, 1]} style={StyleSheet.absoluteFill} />
+      <View style={st.hero}>
+        {heroBg && (
+          <Image
+            source={{ uri: heroBg }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={300}
+          />
+        )}
+        <LinearGradient
+          colors={['rgba(10,10,10,0.3)', 'transparent', 'rgba(10,10,10,0.7)', C.bg]}
+          locations={[0, 0.3, 0.7, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-        {/* Top bar: Logo + icons */}
-        <View style={s.topBar}>
-          <Image source={require('@/assets/logo.png')} style={s.logo} contentFit="contain" />
-          <View style={s.topIcons}>
-            <Pressable onPress={() => router.push('/(tabs)/search' as any)} hitSlop={8} style={s.topIconBtn}>
-              <Search size={22} color="#fff" strokeWidth={2} />
-            </Pressable>
-          </View>
+        {/* Top bar */}
+        <View style={st.topBar}>
+          <Image
+            source={require('@/assets/logo.png')}
+            style={st.logo}
+            contentFit="contain"
+          />
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push('/(tabs)/search' as any);
+            }}
+            hitSlop={8}
+            style={st.topIconBtn}
+          >
+            <Search size={22} color={C.text} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {/* Hero content */}
-        <View style={s.heroContent}>
+        <View style={st.heroContent}>
           {lastWatched && (
-            <View style={s.heroBadge}>
-              <Text style={s.heroBadgeText}>
+            <View style={st.heroBadge}>
+              <Text style={st.heroBadgeText}>
                 {heroIsResume ? 'Continue Watching' : 'Last Watched'}
                 {lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
-                  ? ` · S${lastWatched.season} E${lastWatched.episode}`
+                  ? ` \u00b7 S${lastWatched.season} E${lastWatched.episode}`
                   : ''}
               </Text>
             </View>
           )}
-          <Text style={s.heroTitle} numberOfLines={2}>{heroTitle}</Text>
+          <Text style={st.heroTitle} numberOfLines={2}>{heroTitle}</Text>
           {heroItem && 'overview' in heroItem && (
-            <Text style={s.heroOverview} numberOfLines={2}>{heroItem.overview}</Text>
+            <Text style={st.heroOverview} numberOfLines={2}>
+              {heroItem.overview}
+            </Text>
           )}
 
-          {/* Progress bar for resume */}
           {heroIsResume && lastWatched && (
-            <View style={s.heroProgress}>
-              <View style={[s.heroProgressFill, { width: `${lastWatched.progress}%` }]} />
+            <View style={st.heroProgress}>
+              <View style={[st.heroProgressFill, { width: `${lastWatched.progress}%` }]} />
             </View>
           )}
 
-          <View style={s.heroButtons}>
+          <View style={st.heroButtons}>
             <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push(heroWatchUrl as any); }}
-              style={({ pressed }) => [s.heroPlayBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push(heroWatchUrl as any);
+              }}
+              style={({ pressed }) => [
+                st.heroPlayBtn,
+                pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
+              ]}
             >
-              <Text style={s.heroPlayIcon}>▶</Text>
-              <Text style={s.heroPlayText}>{heroIsResume ? 'Resume' : 'Watch Now'}</Text>
+              <Text style={st.heroPlayIcon}>{'\u25B6'}</Text>
+              <Text style={st.heroPlayText}>
+                {heroIsResume ? 'Resume' : 'Watch Now'}
+              </Text>
             </Pressable>
             <Pressable
-              onPress={() => { Haptics.selectionAsync(); router.push(`/${heroType}/${heroItem?.id}` as any); }}
-              style={({ pressed }) => [s.heroInfoBtn, pressed && { opacity: 0.8 }]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push(`/${heroType}/${heroItem?.id}` as any);
+              }}
+              style={({ pressed }) => [
+                st.heroInfoBtn,
+                pressed && { opacity: 0.8 },
+              ]}
             >
-              <Text style={s.heroInfoText}>Details ›</Text>
+              <Text style={st.heroInfoText}>Details</Text>
             </Pressable>
           </View>
         </View>
       </View>
 
-      {/* ── Content ── */}
-      <View style={s.content}>
-        {/* Continue Watching */}
+      {/* ── Content Rows ── */}
+      <View style={st.content}>
         {continueItems.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Continue Watching</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.cwRow}>
+          <View style={st.section}>
+            <Text style={st.sectionTitle}>Continue Watching</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={st.cwRow}
+            >
               {continueItems.map(item => (
                 <Pressable
                   key={`cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
@@ -136,15 +209,30 @@ export default function HomeScreen() {
                       : `/watch/${item.id}?type=${item.type}`;
                     router.push(url as any);
                   }}
-                  style={({ pressed }) => [s.cwCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                  style={({ pressed }) => [
+                    st.cwCard,
+                    pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                  ]}
                 >
-                  <Image source={{ uri: `https://image.tmdb.org/t/p/w342${item.poster_path}` }} style={s.cwPoster} contentFit="cover" />
-                  {/* Progress bar */}
-                  <View style={s.cwProgressBg}>
-                    <View style={[s.cwProgressFill, { width: `${Math.max(item.progress, 5)}%` }]} />
+                  <Image
+                    source={{ uri: img(item.poster_path, 'w342')! }}
+                    style={st.cwPoster}
+                    contentFit="cover"
+                  />
+                  <View style={st.cwProgressBg}>
+                    <View
+                      style={[
+                        st.cwProgressFill,
+                        { width: `${Math.max(item.progress, 5)}%` },
+                      ]}
+                    />
                   </View>
                   {item.type === 'tv' && item.season && item.episode && (
-                    <View style={s.cwBadge}><Text style={s.cwBadgeText}>S{item.season} E{item.episode}</Text></View>
+                    <View style={st.cwBadge}>
+                      <Text style={st.cwBadgeText}>
+                        S{item.season} E{item.episode}
+                      </Text>
+                    </View>
                   )}
                 </Pressable>
               ))}
@@ -160,56 +248,136 @@ export default function HomeScreen() {
         <ContentRow title="Top Rated Series" data={data.topRatedTv || []} type="tv" />
       </View>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: Layout.tabBarH + S.md }} />
     </ScrollView>
   );
 }
 
-const s = StyleSheet.create({
-  center: { flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center' },
-  root: { flex: 1, backgroundColor: Colors.bg },
+const st = StyleSheet.create({
+  center: {
+    flex: 1,
+    backgroundColor: C.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  root: { flex: 1, backgroundColor: C.bg },
 
   // Hero
-  hero: { width: W, height: H * 0.6, justifyContent: 'flex-end' },
+  hero: {
+    width: Layout.screenW,
+    height: Layout.screenH * 0.6,
+    justifyContent: 'flex-end',
+  },
   topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingTop: 56, paddingHorizontal: 20,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Layout.safeTop,
+    paddingHorizontal: S.screen,
   },
   logo: { width: 110, height: 28 },
-  topIcons: { flexDirection: 'row', gap: 16 },
-  topIconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
-  heroContent: { paddingHorizontal: 20, paddingBottom: 24 },
-  heroBadge: {
-    alignSelf: 'flex-start', backgroundColor: 'rgba(229,9,20,0.2)',
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, marginBottom: 10,
+  topIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: R.xl,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  heroBadgeText: { color: Colors.accent, fontSize: 11, fontWeight: '700' },
-  heroTitle: { fontSize: 32, fontWeight: '800', color: '#fff', letterSpacing: -0.5, lineHeight: 36, marginBottom: 8 },
-  heroOverview: { fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 19, marginBottom: 14 },
-  heroProgress: { height: 3, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, marginBottom: 14, overflow: 'hidden' },
-  heroProgressFill: { height: '100%', backgroundColor: Colors.accent, borderRadius: 2 },
-  heroButtons: { flexDirection: 'row', gap: 10 },
+  heroContent: {
+    paddingHorizontal: S.screen,
+    paddingBottom: S.lg,
+  },
+  heroBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(229,9,20,0.2)',
+    paddingHorizontal: S.sm + 2,
+    paddingVertical: S.xs,
+    borderRadius: R.sm,
+    marginBottom: S.sm + 2,
+  },
+  heroBadgeText: { color: C.accent, ...T.small },
+  heroTitle: {
+    ...T.hero,
+    lineHeight: 36,
+    marginBottom: S.sm,
+  },
+  heroOverview: {
+    ...T.caption,
+    color: C.text2,
+    lineHeight: 19,
+    marginBottom: S.md - 2,
+  },
+  heroProgress: {
+    height: 3,
+    backgroundColor: C.border,
+    borderRadius: 2,
+    marginBottom: S.md - 2,
+    overflow: 'hidden',
+  },
+  heroProgressFill: {
+    height: '100%',
+    backgroundColor: C.accent,
+    borderRadius: 2,
+  },
+  heroButtons: { flexDirection: 'row', gap: S.sm + 2 },
   heroPlayBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#fff', paddingHorizontal: 28, paddingVertical: 13, borderRadius: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.sm,
+    backgroundColor: C.text,
+    paddingHorizontal: S.lg + 4,
+    paddingVertical: S.md - 3,
+    borderRadius: R.pill,
   },
   heroPlayIcon: { fontSize: 11, color: '#000' },
   heroPlayText: { fontSize: 15, fontWeight: '700', color: '#000' },
   heroInfoBtn: {
-    backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 24, paddingVertical: 13, borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: S.lg,
+    paddingVertical: S.md - 3,
+    borderRadius: R.pill,
   },
-  heroInfoText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  heroInfoText: { ...T.h3, color: C.text },
 
   // Content
-  content: { marginTop: -8 },
-  section: { marginBottom: 28 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', paddingHorizontal: 20, marginBottom: 12 },
-  cwRow: { paddingHorizontal: 20, gap: 10 },
-  cwCard: { width: 115, borderRadius: Radius.lg, overflow: 'hidden' },
-  cwPoster: { width: 115, height: 170, borderRadius: Radius.lg },
-  cwProgressBg: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.15)' },
-  cwProgressFill: { height: '100%', backgroundColor: Colors.accent },
-  cwBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  cwBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  content: { marginTop: -S.sm },
+  section: { marginBottom: S.lg + 4 },
+  sectionTitle: {
+    ...T.h2,
+    paddingHorizontal: S.screen,
+    marginBottom: S.sm + 2,
+  },
+  cwRow: { paddingHorizontal: S.screen, gap: S.sm + 2 },
+  cwCard: {
+    width: 115,
+    borderRadius: R.lg,
+    overflow: 'hidden',
+    backgroundColor: C.card,
+  },
+  cwPoster: { width: 115, height: 170, borderRadius: R.lg },
+  cwProgressBg: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: C.border,
+  },
+  cwProgressFill: { height: '100%', backgroundColor: C.accent },
+  cwBadge: {
+    position: 'absolute',
+    top: S.sm,
+    left: S.sm,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: S.xs,
+  },
+  cwBadgeText: { color: C.text, ...T.badge },
 });
