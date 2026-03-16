@@ -310,7 +310,7 @@ const st = StyleSheet.create({
   },
   heroBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(229,9,20,0.2)',
+    backgroundColor: 'rgba(229,9,20,0.35)',
     paddingHorizontal: 10,
     paddingVertical: S.xs,
     borderRadius: R.sm,

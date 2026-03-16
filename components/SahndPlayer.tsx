@@ -1,25 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, Pressable, StyleSheet, Dimensions,
-  ActivityIndicator, Animated, Modal, FlatList, StatusBar,
+  ActivityIndicator, Animated, Modal, StatusBar,
+  PanResponder, GestureResponderEvent,
 } from 'react-native';
 import Video, { SelectedTrackType, ResizeMode } from 'react-native-video';
 import * as Haptics from 'expo-haptics';
-import {
-  Play, Pause, SkipForward, SkipBack, Maximize, Minimize,
-  Captions, ChevronLeft, RotateCcw, Settings, Lock, Unlock,
-  Volume2, VolumeX, ChevronDown,
-} from 'lucide-react-native';
-import { C, S, R, T } from '@/lib/design';
+import { C, R } from '@/lib/design';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-interface PlayerProps {
+interface Props {
   uri: string;
   title?: string;
   subtitle?: string;
   startAt?: number;
-  onProgress?: (seconds: number, duration: number) => void;
+  onProgress?: (sec: number, dur: number) => void;
   onComplete?: () => void;
   onBack?: () => void;
   onNextEpisode?: () => void;
@@ -29,79 +25,103 @@ interface PlayerProps {
 export default function SahndPlayer({
   uri, title, subtitle, startAt = 0,
   onProgress, onComplete, onBack, onNextEpisode, hasNextEpisode,
-}: PlayerProps) {
+}: Props) {
   const videoRef = useRef<any>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const controlsTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
+  // State
   const [paused, setPaused] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [time, setTime] = useState(0);
+  const [dur, setDur] = useState(0);
   const [buffering, setBuffering] = useState(true);
-  const [showControls, setShowControls] = useState(true);
+  const [controls, setControls] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const [locked, setLocked] = useState(false);
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1.0);
-  const [textTracks, setTextTracks] = useState<any[]>([]);
-  const [selectedCC, setSelectedCC] = useState<number | null>(null);
-
-  // Modals
-  const [showSettings, setShowSettings] = useState(false);
-  const [showSpeedPicker, setShowSpeedPicker] = useState(false);
-  const [showCCPicker, setShowCCPicker] = useState(false);
+  const [tracks, setTracks] = useState<any[]>([]);
+  const [ccIdx, setCcIdx] = useState<number | null>(null);
+  const [seeking, setSeeking] = useState(false);
+  const [seekTime, setSeekTime] = useState(0);
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [showCC, setShowCC] = useState(false);
 
   const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+  const pct = dur > 0 ? (seeking ? seekTime : time) / dur : 0;
 
   // ── Auto-hide controls ──
-  const resetTimer = useCallback(() => {
-    if (controlsTimer.current) clearTimeout(controlsTimer.current);
-    if (!paused && !showSettings && !showSpeedPicker && !showCCPicker) {
-      controlsTimer.current = setTimeout(() => {
-        Animated.timing(fadeAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => setShowControls(false));
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (!paused) {
+      hideTimer.current = setTimeout(() => {
+        Animated.timing(fadeAnim, { toValue: 0, duration: 250, useNativeDriver: true })
+          .start(() => setControls(false));
       }, 4000);
     }
-  }, [paused, showSettings, showSpeedPicker, showCCPicker]);
+  }, [paused, fadeAnim]);
 
-  useEffect(() => {
-    if (showControls) resetTimer();
-    return () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); };
-  }, [showControls, paused, resetTimer]);
+  useEffect(() => { if (controls) scheduleHide(); }, [controls, paused]);
 
   const toggleControls = () => {
-    if (locked) return;
-    if (showControls) {
-      Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setShowControls(false));
+    if (controls) {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+        .start(() => setControls(false));
     } else {
-      setShowControls(true);
+      setControls(true);
       fadeAnim.setValue(1);
     }
   };
 
-  // ── Video callbacks ──
-  const onLoad = useCallback((data: any) => {
-    setDuration(data.duration);
+  // ── Video events ──
+  const onLoad = useCallback((d: any) => {
+    setDur(d.duration);
     setBuffering(false);
-    if (data.textTracks) setTextTracks(data.textTracks);
-    if (startAt > 10) videoRef.current?.seek(startAt);
+    if (d.textTracks) setTracks(d.textTracks);
+    if (startAt > 5) videoRef.current?.seek(startAt);
   }, [startAt]);
 
-  const onVideoProgress = useCallback((data: any) => {
-    setCurrentTime(data.currentTime);
-    onProgress?.(data.currentTime, data.seekableDuration || duration);
-  }, [duration, onProgress]);
+  const onVideoProgress = useCallback((d: any) => {
+    if (!seeking) setTime(d.currentTime);
+    onProgress?.(d.currentTime, d.seekableDuration || dur);
+  }, [seeking, dur, onProgress]);
 
-  const seek = (sec: number) => {
+  // ── Seek via pan gesture on progress bar ──
+  const barWidth = useRef(SW - 32); // will be updated
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        setSeeking(true);
+        const x = e.nativeEvent.locationX;
+        const newPct = Math.max(0, Math.min(1, x / barWidth.current));
+        setSeekTime(newPct * dur);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      },
+      onPanResponderMove: (e) => {
+        const x = e.nativeEvent.locationX;
+        const newPct = Math.max(0, Math.min(1, x / barWidth.current));
+        setSeekTime(newPct * dur);
+      },
+      onPanResponderRelease: () => {
+        videoRef.current?.seek(seekTime);
+        setTime(seekTime);
+        setSeeking(false);
+      },
+    })
+  ).current;
+
+  // Update bar width on layout
+  useEffect(() => {
+    barWidth.current = fullscreen ? Math.max(SW, SH) - 32 : SW - 32;
+  }, [fullscreen]);
+
+  const skip = (sec: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const t = Math.max(0, Math.min(currentTime + sec, duration));
+    const t = Math.max(0, Math.min(time + sec, dur));
     videoRef.current?.seek(t);
-    setCurrentTime(t);
-  };
-
-  const seekTo = (pct: number) => {
-    const t = pct * duration;
-    videoRef.current?.seek(t);
-    setCurrentTime(t);
+    setTime(t);
   };
 
   const fmt = (s: number) => {
@@ -109,24 +129,14 @@ export default function SahndPlayer({
     const m = Math.floor((s % 3600) / 60);
     const sec = Math.floor(s % 60);
     return h > 0
-      ? `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
-      : `${m}:${sec.toString().padStart(2, '0')}`;
+      ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+      : `${m}:${String(sec).padStart(2, '0')}`;
   };
 
-  const pct = duration > 0 ? currentTime / duration : 0;
-
-  // ── Settings menu items ──
-  const settingsItems = [
-    { label: 'Speed', value: rate === 1 ? 'Normal' : `${rate}x`, onPress: () => { setShowSettings(false); setShowSpeedPicker(true); } },
-    { label: 'Subtitles', value: selectedCC !== null ? 'On' : 'Off', onPress: () => { setShowSettings(false); setShowCCPicker(true); } },
-    { label: locked ? 'Unlock Screen' : 'Lock Screen', value: '', onPress: () => { setLocked(!locked); setShowSettings(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } },
-  ];
-
   return (
-    <View style={[st.wrap, fullscreen && st.fullscreen]}>
+    <View style={[st.wrap, fullscreen && st.fs]}>
       <StatusBar hidden={fullscreen} />
 
-      {/* ── Video ── */}
       <Video
         ref={videoRef}
         source={{ uri, headers: { Referer: 'https://vixsrc.to/' } }}
@@ -139,189 +149,155 @@ export default function SahndPlayer({
         onProgress={onVideoProgress}
         onEnd={() => onComplete?.()}
         onBuffer={({ isBuffering }: any) => setBuffering(isBuffering)}
-        selectedTextTrack={selectedCC !== null ? { type: SelectedTrackType.INDEX, value: selectedCC } : { type: SelectedTrackType.DISABLED, value: 0 }}
+        selectedTextTrack={
+          ccIdx !== null
+            ? { type: SelectedTrackType.INDEX, value: ccIdx }
+            : { type: SelectedTrackType.DISABLED, value: 0 }
+        }
         ignoreSilentSwitch="ignore"
       />
 
       {/* Tap zone */}
       <Pressable onPress={toggleControls} style={StyleSheet.absoluteFill} />
 
-      {/* Buffering spinner */}
+      {/* Buffering */}
       {buffering && (
-        <View style={st.bufferWrap}>
-          <ActivityIndicator color="#fff" size="large" />
-        </View>
+        <View style={st.buffer}><ActivityIndicator color="#fff" size="large" /></View>
       )}
 
-      {/* Lock indicator */}
-      {locked && !showControls && (
-        <Pressable onPress={() => { setShowControls(true); fadeAnim.setValue(1); }} style={st.lockIndicator}>
-          <Lock size={20} color="rgba(255,255,255,0.5)" />
-        </Pressable>
-      )}
-
-      {/* ── Controls Overlay ── */}
-      {showControls && !locked && (
+      {/* ── Controls ── */}
+      {controls && (
         <Animated.View style={[st.overlay, { opacity: fadeAnim }]}>
-          {/* Top bar */}
-          <View style={st.topBar}>
-            <Pressable onPress={onBack} hitSlop={12} style={st.topBtn}>
-              <ChevronDown size={28} color="#fff" strokeWidth={2.5} />
+
+          {/* Top */}
+          <View style={st.top}>
+            <Pressable onPress={onBack} style={st.btn} hitSlop={12}>
+              <Text style={st.btnIcon}>{'\u2039'}</Text>
             </Pressable>
-            <View style={st.topCenter}>
-              {title && <Text style={st.topTitle} numberOfLines={1}>{title}</Text>}
-              {subtitle && <Text style={st.topSub} numberOfLines={1}>{subtitle}</Text>}
+            <View style={st.topMid}>
+              {title ? <Text style={st.topTitle} numberOfLines={1}>{title}</Text> : null}
+              {subtitle ? <Text style={st.topSub} numberOfLines={1}>{subtitle}</Text> : null}
             </View>
-            <Pressable onPress={() => { Haptics.selectionAsync(); setShowSettings(true); }} style={st.topBtn}>
-              <Settings size={22} color="#fff" strokeWidth={2} />
-            </Pressable>
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Center controls */}
+          {/* Center */}
           <View style={st.center}>
-            <Pressable onPress={() => seek(-10)} style={st.seekBtn}>
-              <RotateCcw size={32} color="#fff" strokeWidth={1.8} />
-              <Text style={st.seekLabel}>10</Text>
+            <Pressable onPress={() => skip(-10)} style={st.skipBtn}>
+              <Text style={st.skipIcon}>{'\u21BA'}</Text>
+              <Text style={st.skipNum}>10</Text>
             </Pressable>
 
             <Pressable
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPaused(!paused); }}
-              style={st.mainPlayBtn}
+              style={st.playBtn}
             >
-              {paused
-                ? <Play size={40} color="#fff" fill="#fff" strokeWidth={0} />
-                : <Pause size={40} color="#fff" fill="#fff" strokeWidth={0} />
-              }
+              <Text style={st.playIcon}>{paused ? '\u25B6' : '\u2759\u2759'}</Text>
             </Pressable>
 
-            <Pressable onPress={() => seek(10)} style={st.seekBtn}>
-              <RotateCcw size={32} color="#fff" strokeWidth={1.8} style={{ transform: [{ scaleX: -1 }] }} />
-              <Text style={st.seekLabel}>10</Text>
+            <Pressable onPress={() => skip(10)} style={st.skipBtn}>
+              <Text style={[st.skipIcon, { transform: [{ scaleX: -1 }] }]}>{'\u21BA'}</Text>
+              <Text style={st.skipNum}>10</Text>
             </Pressable>
           </View>
 
-          {/* Bottom bar */}
-          <View style={st.bottom}>
-            {/* Progress */}
-            <View style={st.progressRow}>
-              <Text style={st.time}>{fmt(currentTime)}</Text>
-              <Pressable
-                style={st.progressTrack}
-                onPress={(e) => {
-                  const w = fullscreen ? SH - 80 : SW - 120;
-                  seekTo(Math.max(0, Math.min(1, e.nativeEvent.locationX / w)));
-                }}
+          {/* Bottom */}
+          <View style={st.bot}>
+            {/* Timeline */}
+            <View style={st.timeRow}>
+              <Text style={st.timeText}>{fmt(seeking ? seekTime : time)}</Text>
+              <View
+                style={st.bar}
+                {...panResponder.panHandlers}
+                onLayout={(e) => { barWidth.current = e.nativeEvent.layout.width; }}
               >
-                <View style={st.progressBg} />
-                <View style={[st.progressFill, { width: `${pct * 100}%` }]} />
-                <View style={[st.progressThumb, { left: `${pct * 100}%` }]} />
-              </Pressable>
-              <Text style={st.time}>{fmt(duration)}</Text>
+                <View style={st.barBg} />
+                <View style={[st.barFill, { width: `${pct * 100}%` }]} />
+                <View style={[st.thumb, { left: `${pct * 100}%` }]} />
+              </View>
+              <Text style={st.timeText}>{fmt(dur)}</Text>
             </View>
 
             {/* Bottom buttons */}
-            <View style={st.bottomBtns}>
-              {/* Mute */}
-              <Pressable onPress={() => { Haptics.selectionAsync(); setMuted(!muted); }} style={st.iconBtn}>
-                {muted ? <VolumeX size={20} color="#fff" strokeWidth={2} /> : <Volume2 size={20} color="#fff" strokeWidth={2} />}
+            <View style={st.botBtns}>
+              <Pressable onPress={() => { Haptics.selectionAsync(); setMuted(!muted); }} style={st.smBtn}>
+                <Text style={st.smBtnText}>{muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}</Text>
               </Pressable>
 
-              {/* CC */}
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); setShowCCPicker(true); }}
-                style={[st.pillBtn, selectedCC !== null && st.pillBtnActive]}
-              >
-                <Captions size={16} color={selectedCC !== null ? '#000' : '#fff'} strokeWidth={2} />
+              <Pressable onPress={() => setShowCC(true)} style={[st.pill, ccIdx !== null && st.pillOn]}>
+                <Text style={[st.pillText, ccIdx !== null && { color: '#000' }]}>CC</Text>
               </Pressable>
 
-              {/* Speed */}
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); setShowSpeedPicker(true); }}
-                style={[st.pillBtn, rate !== 1.0 && st.pillBtnActive]}
-              >
-                <Text style={[st.pillText, rate !== 1.0 && { color: '#000' }]}>{rate}x</Text>
+              <Pressable onPress={() => setShowSpeed(true)} style={[st.pill, rate !== 1 && st.pillOn]}>
+                <Text style={[st.pillText, rate !== 1 && { color: '#000' }]}>{rate}x</Text>
               </Pressable>
 
               <View style={{ flex: 1 }} />
 
-              {/* Next Episode */}
               {hasNextEpisode && (
                 <Pressable onPress={() => { Haptics.selectionAsync(); onNextEpisode?.(); }} style={st.nextBtn}>
-                  <Text style={st.nextText}>Next</Text>
-                  <SkipForward size={16} color="#fff" strokeWidth={2} />
+                  <Text style={st.nextText}>Next {'\u203A'}</Text>
                 </Pressable>
               )}
 
-              {/* Fullscreen */}
-              <Pressable onPress={() => { Haptics.selectionAsync(); setFullscreen(!fullscreen); }} style={st.iconBtn}>
-                {fullscreen ? <Minimize size={20} color="#fff" strokeWidth={2} /> : <Maximize size={20} color="#fff" strokeWidth={2} />}
+              <Pressable onPress={() => setFullscreen(!fullscreen)} style={st.smBtn}>
+                <Text style={st.smBtnText}>{fullscreen ? '\u2198' : '\u2197'}</Text>
               </Pressable>
             </View>
           </View>
         </Animated.View>
       )}
 
-      {/* ── Settings Modal ── */}
-      <Modal visible={showSettings} transparent animationType="fade">
-        <Pressable style={st.modalBg} onPress={() => setShowSettings(false)}>
-          <View style={st.modalSheet}>
-            <Text style={st.modalTitle}>Settings</Text>
-            {settingsItems.map((item, i) => (
-              <Pressable key={i} onPress={item.onPress} style={st.modalRow}>
-                <Text style={st.modalLabel}>{item.label}</Text>
-                {item.value ? <Text style={st.modalValue}>{item.value}</Text> : null}
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ── Speed Picker Modal ── */}
-      <Modal visible={showSpeedPicker} transparent animationType="fade">
-        <Pressable style={st.modalBg} onPress={() => setShowSpeedPicker(false)}>
-          <View style={st.modalSheet}>
-            <Text style={st.modalTitle}>Playback Speed</Text>
-            {speeds.map(spd => (
+      {/* ── Speed picker ── */}
+      <Modal visible={showSpeed} transparent animationType="fade">
+        <Pressable style={st.modalBg} onPress={() => setShowSpeed(false)}>
+          <View style={st.sheet}>
+            <View style={st.sheetHandle} />
+            <Text style={st.sheetTitle}>Playback Speed</Text>
+            {speeds.map(s => (
               <Pressable
-                key={spd}
-                onPress={() => { Haptics.selectionAsync(); setRate(spd); setShowSpeedPicker(false); }}
-                style={[st.modalRow, rate === spd && st.modalRowActive]}
+                key={s}
+                onPress={() => { Haptics.selectionAsync(); setRate(s); setShowSpeed(false); }}
+                style={[st.sheetRow, rate === s && st.sheetRowActive]}
               >
-                <Text style={[st.modalLabel, rate === spd && { color: C.accent }]}>
-                  {spd === 1.0 ? 'Normal' : `${spd}x`}
+                <Text style={[st.sheetLabel, rate === s && { color: C.accent, fontWeight: '600' }]}>
+                  {s === 1 ? 'Normal' : `${s}x`}
                 </Text>
-                {rate === spd && <View style={st.activeDot} />}
+                {rate === s && <View style={st.dot} />}
               </Pressable>
             ))}
           </View>
         </Pressable>
       </Modal>
 
-      {/* ── CC Picker Modal ── */}
-      <Modal visible={showCCPicker} transparent animationType="fade">
-        <Pressable style={st.modalBg} onPress={() => setShowCCPicker(false)}>
-          <View style={st.modalSheet}>
-            <Text style={st.modalTitle}>Subtitles</Text>
+      {/* ── CC picker ── */}
+      <Modal visible={showCC} transparent animationType="fade">
+        <Pressable style={st.modalBg} onPress={() => setShowCC(false)}>
+          <View style={st.sheet}>
+            <View style={st.sheetHandle} />
+            <Text style={st.sheetTitle}>Subtitles</Text>
             <Pressable
-              onPress={() => { setSelectedCC(null); setShowCCPicker(false); }}
-              style={[st.modalRow, selectedCC === null && st.modalRowActive]}
+              onPress={() => { setCcIdx(null); setShowCC(false); }}
+              style={[st.sheetRow, ccIdx === null && st.sheetRowActive]}
             >
-              <Text style={[st.modalLabel, selectedCC === null && { color: C.accent }]}>Off</Text>
-              {selectedCC === null && <View style={st.activeDot} />}
+              <Text style={[st.sheetLabel, ccIdx === null && { color: C.accent, fontWeight: '600' }]}>Off</Text>
+              {ccIdx === null && <View style={st.dot} />}
             </Pressable>
-            {textTracks.map((track, idx) => (
+            {tracks.map((t, i) => (
               <Pressable
-                key={idx}
-                onPress={() => { Haptics.selectionAsync(); setSelectedCC(idx); setShowCCPicker(false); }}
-                style={[st.modalRow, selectedCC === idx && st.modalRowActive]}
+                key={i}
+                onPress={() => { Haptics.selectionAsync(); setCcIdx(i); setShowCC(false); }}
+                style={[st.sheetRow, ccIdx === i && st.sheetRowActive]}
               >
-                <Text style={[st.modalLabel, selectedCC === idx && { color: C.accent }]}>
-                  {track.title || track.language || `Track ${idx + 1}`}
+                <Text style={[st.sheetLabel, ccIdx === i && { color: C.accent, fontWeight: '600' }]}>
+                  {t.title || t.language || `Track ${i + 1}`}
                 </Text>
-                {selectedCC === idx && <View style={st.activeDot} />}
+                {ccIdx === i && <View style={st.dot} />}
               </Pressable>
             ))}
-            {textTracks.length === 0 && <Text style={st.modalEmpty}>No subtitles available</Text>}
+            {tracks.length === 0 && (
+              <Text style={st.sheetEmpty}>No subtitles available for this source</Text>
+            )}
           </View>
         </Pressable>
       </Modal>
@@ -331,61 +307,52 @@ export default function SahndPlayer({
 
 const st = StyleSheet.create({
   wrap: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
-  fullscreen: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, aspectRatio: undefined },
+  fs: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, aspectRatio: undefined },
   video: { width: '100%', height: '100%' },
-  bufferWrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', backgroundColor: 'rgba(0,0,0,0.4)' },
-
-  // Lock
-  lockIndicator: { position: 'absolute', top: 16, left: 16, padding: 8 },
+  buffer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', backgroundColor: 'rgba(0,0,0,0.45)' },
 
   // Top
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 8 },
-  topBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  topCenter: { flex: 1, alignItems: 'center' },
+  top: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, paddingHorizontal: 4 },
+  btn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  btnIcon: { color: '#fff', fontSize: 32, fontWeight: '300' },
+  topMid: { flex: 1, alignItems: 'center' },
   topTitle: { color: '#fff', fontSize: 15, fontWeight: '600' },
   topSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 1 },
 
   // Center
   center: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 48 },
-  seekBtn: { width: 56, height: 56, justifyContent: 'center', alignItems: 'center' },
-  seekLabel: { color: '#fff', fontSize: 11, fontWeight: '700', position: 'absolute', bottom: 6 },
-  mainPlayBtn: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  skipBtn: { width: 52, height: 52, justifyContent: 'center', alignItems: 'center' },
+  skipIcon: { color: '#fff', fontSize: 28 },
+  skipNum: { color: '#fff', fontSize: 10, fontWeight: '700', position: 'absolute', bottom: 4 },
+  playBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
+  playIcon: { color: '#fff', fontSize: 28 },
 
   // Bottom
-  bottom: { paddingHorizontal: 16, paddingBottom: 16 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  time: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontVariant: ['tabular-nums'], width: 52, textAlign: 'center' },
-  progressTrack: { flex: 1, height: 20, justifyContent: 'center' },
-  progressBg: { position: 'absolute', left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 1.5 },
-  progressFill: { position: 'absolute', left: 0, height: 3, backgroundColor: C.accent, borderRadius: 1.5 },
-  progressThumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, backgroundColor: C.accent, top: 3, marginLeft: -7 },
-  bottomBtns: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconBtn: { width: 40, height: 36, justifyContent: 'center', alignItems: 'center' },
-  pillBtn: { height: 32, paddingHorizontal: 12, borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center' },
-  pillBtnActive: { backgroundColor: '#fff' },
+  bot: { paddingHorizontal: 16, paddingBottom: 12 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  timeText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontVariant: ['tabular-nums'], width: 50, textAlign: 'center' },
+  bar: { flex: 1, height: 28, justifyContent: 'center' },
+  barBg: { position: 'absolute', left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 1.5 },
+  barFill: { position: 'absolute', left: 0, height: 3, backgroundColor: C.accent, borderRadius: 1.5 },
+  thumb: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: C.accent, top: 6, marginLeft: -8 },
+  botBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  smBtn: { width: 36, height: 32, justifyContent: 'center', alignItems: 'center' },
+  smBtnText: { fontSize: 18 },
+  pill: { height: 30, paddingHorizontal: 12, borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.14)', justifyContent: 'center', alignItems: 'center' },
+  pillOn: { backgroundColor: '#fff' },
   pillText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  nextBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 14, borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.15)' },
+  nextBtn: { height: 30, paddingHorizontal: 14, borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
   nextText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   // Modals
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalSheet: {
-    backgroundColor: '#1c1c1e', borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    paddingTop: 20, paddingBottom: 40, paddingHorizontal: 20,
-  },
-  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-  modalRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-  modalRowActive: { backgroundColor: 'rgba(229,9,20,0.08)', marginHorizontal: -12, paddingHorizontal: 12, borderRadius: 8 },
-  modalLabel: { color: '#fff', fontSize: 16 },
-  modalValue: { color: C.text2, fontSize: 15 },
-  modalEmpty: { color: C.text3, fontSize: 14, paddingVertical: 12, textAlign: 'center' },
-  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent },
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#1c1c1e', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 12, paddingBottom: 40, paddingHorizontal: 20 },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
+  sheetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  sheetRowActive: { backgroundColor: 'rgba(229,9,20,0.06)', marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 8 },
+  sheetLabel: { color: '#fff', fontSize: 16 },
+  sheetEmpty: { color: 'rgba(255,255,255,0.3)', fontSize: 14, paddingVertical: 16, textAlign: 'center' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent },
 });
