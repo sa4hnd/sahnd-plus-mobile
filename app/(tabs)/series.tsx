@@ -47,7 +47,7 @@ export default function SeriesTab() {
       }
     >
       <View style={st.header}>
-        <Text style={st.headerTitle}>Series</Text>
+        <Text style={st.headerTitle}>TV Shows</Text>
       </View>
       <ContentRow title="Popular Series" data={data.popular || []} type="tv" />
       <ContentRow title="Top Rated" data={data.topRated || []} type="tv" />
@@ -69,5 +69,5 @@ const st = StyleSheet.create({
     paddingHorizontal: S.screen,
     paddingBottom: S.screen,
   },
-  headerTitle: T.h1,
+  headerTitle: T.pageTitle,
 });

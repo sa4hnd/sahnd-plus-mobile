@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, Pressable,
-  StyleSheet, ActivityIndicator,
+  StyleSheet, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { GlassView } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Search } from 'lucide-react-native';
-import { searchMulti, img, movieGenres, tvGenres } from '@/lib/tmdb';
+import { searchMulti, img, movieGenres, tvGenres, discoverByGenre } from '@/lib/tmdb';
 import { C, S, R, Layout, T } from '@/lib/design';
 import { Movie, Genre } from '@/types';
 
+const { width: SCREEN_W } = Dimensions.get('window');
 const COLS = 3;
-const GAP = S.sm;
-const CARD_W = (Layout.screenW - S.screen * 2 - GAP * (COLS - 1)) / COLS;
+const GAP = S.rowGap;
+const CARD_W = (SCREEN_W - S.screen * 2 - GAP * (COLS - 1)) / COLS;
+const SEARCH_H = 38;
 
 export default function SearchTab() {
   const router = useRouter();
@@ -77,17 +78,6 @@ export default function SearchTab() {
           transition={200}
           recyclingKey={`s-${item.id}`}
         />
-        <Text style={st.cardTitle} numberOfLines={1}>
-          {item.title || item.name}
-        </Text>
-        <View style={st.cardMeta}>
-          <Text style={st.cardType}>{type.toUpperCase()}</Text>
-          {item.vote_average > 0 && (
-            <Text style={st.cardRating}>
-              {'\u2605'} {item.vote_average.toFixed(1)}
-            </Text>
-          )}
-        </View>
       </Pressable>
     );
   };
@@ -97,25 +87,25 @@ export default function SearchTab() {
       {/* Header */}
       <View style={st.header}>
         <Text style={st.title}>Search</Text>
-        <GlassView style={st.inputWrap} glassEffectStyle="regular">
+        <View style={st.searchBar}>
           <Search size={18} color={C.text3} strokeWidth={2} />
           <TextInput
             style={st.input}
-            placeholder="Movies, series, people..."
+            placeholder="Search movies, shows..."
             placeholderTextColor={C.text3}
             value={query}
             onChangeText={search}
             clearButtonMode="while-editing"
             returnKeyType="search"
           />
-        </GlassView>
+        </View>
       </View>
 
       {results.length > 0 ? (
         <FlatList
           data={results}
           numColumns={COLS}
-          keyExtractor={i => `${i.id}`}
+          keyExtractor={(i) => `${i.id}`}
           renderItem={renderCard}
           contentContainerStyle={st.listContent}
           columnWrapperStyle={{ gap: GAP }}
@@ -141,23 +131,21 @@ export default function SearchTab() {
         </View>
       ) : (
         <View style={st.genreContainer}>
-          <Text style={st.genreTitle}>Browse by Genre</Text>
+          <Text style={st.genreLabel}>Browse by Genre</Text>
           <View style={st.genreWrap}>
-            {genres.slice(0, 20).map(g => (
+            {genres.slice(0, 20).map((g) => (
               <Pressable
                 key={g.id}
                 onPress={() => {
                   Haptics.selectionAsync();
                   router.push(`/genre/${g.id}` as any);
                 }}
+                style={({ pressed }) => [
+                  st.genrePill,
+                  pressed && { opacity: 0.8 },
+                ]}
               >
-                <GlassView
-                  style={st.genrePill}
-                  glassEffectStyle="regular"
-                  isInteractive
-                >
-                  <Text style={st.genrePillText}>{g.name}</Text>
-                </GlassView>
+                <Text style={st.genrePillText}>{g.name}</Text>
               </Pressable>
             ))}
           </View>
@@ -174,18 +162,19 @@ const st = StyleSheet.create({
     paddingHorizontal: S.screen,
     paddingBottom: S.sm + 4,
   },
-  title: { ...T.h1, marginBottom: S.md },
-  inputWrap: {
+  title: { ...T.pageTitle, marginBottom: S.md },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.elevated,
+    backgroundColor: C.surface,
     borderRadius: R.md,
+    height: SEARCH_H,
     paddingHorizontal: S.md - 4,
     gap: S.sm,
   },
   input: {
     flex: 1,
-    height: 46,
+    height: SEARCH_H,
     color: C.text,
     fontSize: 16,
   },
@@ -199,29 +188,13 @@ const st = StyleSheet.create({
   },
   card: {
     width: CARD_W,
-    marginBottom: GAP + 4,
+    marginBottom: GAP,
   },
   cardPoster: {
     width: CARD_W,
     height: CARD_W * 1.5,
-    borderRadius: R.lg,
-    backgroundColor: C.card,
-  },
-  cardTitle: {
-    ...T.caption,
-    color: C.text2,
-    marginTop: S.xs + 2,
-    marginBottom: 2,
-  },
-  cardMeta: { flexDirection: 'row', gap: S.xs + 2 },
-  cardType: {
-    ...T.badge,
-    color: C.text3,
-    textTransform: 'uppercase',
-  },
-  cardRating: {
-    ...T.badge,
-    color: C.yellow,
+    borderRadius: R.sm,
+    backgroundColor: C.surface,
   },
   empty: {
     flex: 1,
@@ -230,14 +203,14 @@ const st = StyleSheet.create({
     paddingBottom: Layout.tabBarH,
     gap: S.sm + 4,
   },
-  emptyTitle: { ...T.h3, color: C.text2 },
+  emptyTitle: { ...T.sectionTitle, color: C.text2 },
   emptyText: { ...T.body, color: C.text3 },
   genreContainer: {
     paddingHorizontal: S.screen,
     paddingTop: S.sm,
   },
-  genreTitle: {
-    ...T.h2,
+  genreLabel: {
+    ...T.sectionTitle,
     marginBottom: S.md - 4,
   },
   genreWrap: {
@@ -246,7 +219,7 @@ const st = StyleSheet.create({
     gap: S.sm,
   },
   genrePill: {
-    backgroundColor: C.elevated,
+    backgroundColor: C.surface,
     paddingHorizontal: S.md,
     paddingVertical: S.sm + 2,
     borderRadius: R.pill,

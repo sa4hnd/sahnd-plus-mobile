@@ -80,5 +80,5 @@ const st = StyleSheet.create({
     paddingHorizontal: S.screen,
     paddingBottom: S.screen,
   },
-  headerTitle: T.h1,
+  headerTitle: T.pageTitle,
 });

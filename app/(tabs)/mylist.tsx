@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, FlatList, Pressable, Alert,
-  StyleSheet, ActivityIndicator,
+  StyleSheet, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -12,18 +12,19 @@ import { img } from '@/lib/tmdb';
 import { C, S, R, Layout, T } from '@/lib/design';
 import { WatchlistItem } from '@/types';
 
-const COLS = 2;
-const GAP = S.md - 4;
-const CARD_W = (Layout.screenW - S.screen * 2 - GAP) / COLS;
+const { width: SCREEN_W } = Dimensions.get('window');
+const COLS = 3;
+const GAP = S.rowGap;
+const CARD_W = (SCREEN_W - S.screen * 2 - GAP * (COLS - 1)) / COLS;
 
-export default function MyListTab() {
+export default function MyNetflixTab() {
   const router = useRouter();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      getWatchlist().then(d => {
+      getWatchlist().then((d) => {
         setItems(d.sort((a, b) => b.addedAt - a.addedAt));
         setLoading(false);
       });
@@ -42,8 +43,8 @@ export default function MyListTab() {
           style: 'destructive',
           onPress: async () => {
             await removeFromWatchlist(item.id, item.type);
-            setItems(prev =>
-              prev.filter(i => !(i.id === item.id && i.type === item.type)),
+            setItems((prev) =>
+              prev.filter((i) => !(i.id === item.id && i.type === item.type)),
             );
           },
         },
@@ -62,7 +63,7 @@ export default function MyListTab() {
   return (
     <View style={st.container}>
       <View style={st.header}>
-        <Text style={st.headerTitle}>My List</Text>
+        <Text style={st.headerTitle}>My Netflix</Text>
         <Text style={st.headerCount}>
           {items.length} title{items.length !== 1 ? 's' : ''}
         </Text>
@@ -72,7 +73,7 @@ export default function MyListTab() {
         <FlatList
           data={items}
           numColumns={COLS}
-          keyExtractor={i => `${i.type}-${i.id}`}
+          keyExtractor={(i) => `${i.type}-${i.id}`}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => {
@@ -92,15 +93,6 @@ export default function MyListTab() {
                 transition={200}
                 recyclingKey={`wl-${item.id}`}
               />
-              <Text style={st.cardTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <View style={st.cardMeta}>
-                <Text style={st.cardType}>{item.type.toUpperCase()}</Text>
-                <Text style={st.cardRating}>
-                  {'\u2605'} {item.vote_average.toFixed(1)}
-                </Text>
-              </View>
             </Pressable>
           )}
           contentContainerStyle={st.listContent}
@@ -133,7 +125,7 @@ const st = StyleSheet.create({
     paddingHorizontal: S.screen,
     paddingBottom: S.md,
   },
-  headerTitle: { ...T.h1, marginBottom: S.xs },
+  headerTitle: { ...T.pageTitle, marginBottom: S.xs },
   headerCount: T.caption,
   listContent: {
     paddingHorizontal: S.screen,
@@ -141,33 +133,13 @@ const st = StyleSheet.create({
   },
   card: {
     width: CARD_W,
-    marginBottom: GAP + 4,
+    marginBottom: GAP,
   },
   poster: {
     width: CARD_W,
     height: CARD_W * 1.5,
-    borderRadius: R.lg,
-    backgroundColor: C.card,
-  },
-  cardTitle: {
-    ...T.caption,
-    color: C.text2,
-    fontWeight: '500',
-    marginTop: S.sm,
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    gap: S.xs + 2,
-    marginTop: 3,
-  },
-  cardType: {
-    ...T.badge,
-    color: C.text3,
-    textTransform: 'uppercase',
-  },
-  cardRating: {
-    ...T.badge,
-    color: C.yellow,
+    borderRadius: R.sm,
+    backgroundColor: C.surface,
   },
   empty: {
     flex: 1,
@@ -176,6 +148,6 @@ const st = StyleSheet.create({
     paddingBottom: Layout.tabBarH,
     gap: S.sm + 4,
   },
-  emptyTitle: { ...T.h3, color: C.text2 },
+  emptyTitle: { ...T.sectionTitle, color: C.text2 },
   emptyText: { ...T.body, color: C.text3 },
 });

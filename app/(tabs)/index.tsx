@@ -1,22 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, RefreshControl, ActivityIndicator,
-  StyleSheet, Pressable, Platform,
+  StyleSheet, Pressable, Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { GlassView } from 'expo-glass-effect';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Search } from 'lucide-react-native';
+import { Search, Play, Plus } from 'lucide-react-native';
 import {
   trending, popularMovies, topRatedMovies,
-  nowPlayingMovies, popularTV, topRatedTV, img,
+  nowPlayingMovies, popularTV, img,
 } from '@/lib/tmdb';
 import { getContinueWatching, getLastWatched } from '@/lib/storage';
 import { C, S, R, Layout, T } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
 import { Movie, WatchHistoryItem } from '@/types';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const HERO_H = SCREEN_H * 0.55;
+const CW_THUMB_W = Layout.thumbW;
+const CW_THUMB_H = Layout.thumbH;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -28,9 +33,9 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [t, pm, tr, np, pt, tt] = await Promise.all([
+      const [t, pm, tr, np, pt] = await Promise.all([
         trending(), popularMovies(), topRatedMovies(),
-        nowPlayingMovies(), popularTV(), topRatedTV(),
+        nowPlayingMovies(), popularTV(),
       ]);
       setData({
         trending: t.results,
@@ -38,7 +43,6 @@ export default function HomeScreen() {
         topRated: tr.results,
         nowPlaying: np.results,
         popularTv: pt.results,
-        topRatedTv: tt.results,
       });
     } catch (e) {
       console.error(e);
@@ -77,7 +81,8 @@ export default function HomeScreen() {
   const heroBg = heroItem?.backdrop_path
     ? `https://image.tmdb.org/t/p/original${heroItem.backdrop_path}`
     : null;
-  const heroIsResume = lastWatched && !lastWatched.completed && lastWatched.progress > 0;
+  const heroIsResume =
+    lastWatched && !lastWatched.completed && lastWatched.progress > 0;
   const heroWatchUrl = lastWatched
     ? lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
       ? `/watch/${lastWatched.id}?type=tv&s=${lastWatched.season}&e=${lastWatched.episode}`
@@ -109,7 +114,7 @@ export default function HomeScreen() {
           />
         )}
         <LinearGradient
-          colors={['rgba(10,10,10,0.3)', 'transparent', 'rgba(10,10,10,0.7)', C.bg]}
+          colors={['rgba(20,20,20,0.3)', 'transparent', 'rgba(20,20,20,0.7)', C.bg]}
           locations={[0, 0.3, 0.7, 1]}
           style={StyleSheet.absoluteFill}
         />
@@ -137,14 +142,14 @@ export default function HomeScreen() {
         {/* Hero content */}
         <View style={st.heroContent}>
           {lastWatched && (
-            <GlassView style={st.heroBadge} glassEffectStyle="regular">
+            <View style={st.heroBadge}>
               <Text style={st.heroBadgeText}>
                 {heroIsResume ? 'Continue Watching' : 'Last Watched'}
                 {lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
                   ? ` \u00b7 S${lastWatched.season} E${lastWatched.episode}`
                   : ''}
               </Text>
-            </GlassView>
+            </View>
           )}
           <Text style={st.heroTitle} numberOfLines={2}>{heroTitle}</Text>
           {heroItem && 'overview' in heroItem && (
@@ -170,9 +175,9 @@ export default function HomeScreen() {
                 pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
               ]}
             >
-              <Text style={st.heroPlayIcon}>{'\u25B6'}</Text>
+              <Play size={18} color="#000" fill="#000" strokeWidth={0} />
               <Text style={st.heroPlayText}>
-                {heroIsResume ? 'Resume' : 'Watch Now'}
+                {heroIsResume ? 'Resume' : 'Play'}
               </Text>
             </Pressable>
             <Pressable
@@ -180,12 +185,11 @@ export default function HomeScreen() {
                 Haptics.selectionAsync();
                 router.push(`/${heroType}/${heroItem?.id}` as any);
               }}
-              style={({ pressed }) => [
-                pressed && { opacity: 0.8 },
-              ]}
+              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
             >
-              <GlassView style={st.heroInfoBtn} glassEffectStyle="regular" isInteractive>
-                <Text style={st.heroInfoText}>Details</Text>
+              <GlassView style={st.heroListBtn} glassEffectStyle="regular" isInteractive>
+                <Plus size={18} color={C.text} strokeWidth={2} />
+                <Text style={st.heroListText}>My List</Text>
               </GlassView>
             </Pressable>
           </View>
@@ -202,14 +206,15 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={st.cwRow}
             >
-              {continueItems.map(item => (
+              {continueItems.map((item) => (
                 <Pressable
                   key={`cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    const url = item.type === 'tv' && item.season && item.episode
-                      ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}`
-                      : `/watch/${item.id}?type=${item.type}`;
+                    const url =
+                      item.type === 'tv' && item.season && item.episode
+                        ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}`
+                        : `/watch/${item.id}?type=${item.type}`;
                     router.push(url as any);
                   }}
                   style={({ pressed }) => [
@@ -218,8 +223,8 @@ export default function HomeScreen() {
                   ]}
                 >
                   <Image
-                    source={{ uri: img(item.poster_path, 'w342')! }}
-                    style={st.cwPoster}
+                    source={{ uri: img(item.backdrop_path || item.poster_path, 'w342')! }}
+                    style={st.cwThumb}
                     contentFit="cover"
                   />
                   <View style={st.cwProgressBg}>
@@ -243,12 +248,11 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <ContentRow title="Trending" data={data.trending?.slice(1) || []} />
+        <ContentRow title="Trending Now" data={data.trending?.slice(1) || []} />
         <ContentRow title="Popular Movies" data={data.popular || []} type="movie" />
         <ContentRow title="Now Playing" data={data.nowPlaying || []} type="movie" />
         <ContentRow title="Top Rated" data={data.topRated || []} type="movie" />
         <ContentRow title="Popular Series" data={data.popularTv || []} type="tv" />
-        <ContentRow title="Top Rated Series" data={data.topRatedTv || []} type="tv" />
       </View>
 
       <View style={{ height: Layout.tabBarH + S.md }} />
@@ -267,8 +271,8 @@ const st = StyleSheet.create({
 
   // Hero
   hero: {
-    width: Layout.screenW,
-    height: Layout.screenH * 0.6,
+    width: SCREEN_W,
+    height: HERO_H,
     justifyContent: 'flex-end',
   },
   topBar: {
@@ -283,11 +287,11 @@ const st = StyleSheet.create({
     paddingTop: Layout.safeTop,
     paddingHorizontal: S.screen,
   },
-  logo: { width: 140, height: 36 },
+  logo: { width: 120, height: 32 },
   topIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: R.xl,
+    borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -299,14 +303,14 @@ const st = StyleSheet.create({
   heroBadge: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(229,9,20,0.2)',
-    paddingHorizontal: S.sm + 2,
+    paddingHorizontal: 10,
     paddingVertical: S.xs,
     borderRadius: R.sm,
-    marginBottom: S.sm + 2,
+    marginBottom: 10,
   },
   heroBadgeText: { color: C.accent, ...T.small },
   heroTitle: {
-    ...T.hero,
+    ...T.heroTitle,
     lineHeight: 36,
     marginBottom: S.sm,
   },
@@ -314,13 +318,13 @@ const st = StyleSheet.create({
     ...T.caption,
     color: C.text2,
     lineHeight: 19,
-    marginBottom: S.md - 2,
+    marginBottom: 14,
   },
   heroProgress: {
     height: 3,
-    backgroundColor: C.border,
+    backgroundColor: C.separator,
     borderRadius: 2,
-    marginBottom: S.md - 2,
+    marginBottom: 14,
     overflow: 'hidden',
   },
   heroProgressFill: {
@@ -328,49 +332,57 @@ const st = StyleSheet.create({
     backgroundColor: C.accent,
     borderRadius: 2,
   },
-  heroButtons: { flexDirection: 'row', gap: S.sm + 2 },
+  heroButtons: { flexDirection: 'row', gap: 10 },
   heroPlayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: S.sm,
-    backgroundColor: C.text,
-    paddingHorizontal: S.lg + 4,
-    paddingVertical: S.md - 3,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 28,
+    paddingVertical: 13,
     borderRadius: R.pill,
   },
-  heroPlayIcon: { fontSize: 11, color: '#000' },
-  heroPlayText: { fontSize: 15, fontWeight: '700', color: '#000' },
-  heroInfoBtn: {
+  heroPlayText: { ...T.button, color: '#000000' },
+  heroListBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.sm,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: S.lg,
-    paddingVertical: S.md - 3,
+    paddingHorizontal: 24,
+    paddingVertical: 13,
     borderRadius: R.pill,
   },
-  heroInfoText: { ...T.h3, color: C.text },
+  heroListText: { ...T.button, color: C.text },
 
   // Content
   content: { marginTop: -S.sm },
-  section: { marginBottom: S.lg + 4 },
+  section: { marginBottom: S.sectionGap },
   sectionTitle: {
-    ...T.h2,
+    ...T.sectionTitle,
     paddingHorizontal: S.screen,
-    marginBottom: S.sm + 2,
+    marginBottom: S.sm,
   },
-  cwRow: { paddingHorizontal: S.screen, gap: S.sm + 2 },
+
+  // Continue Watching (landscape 16:9)
+  cwRow: { paddingHorizontal: S.screen, gap: S.rowGap },
   cwCard: {
-    width: 115,
-    borderRadius: R.lg,
+    width: CW_THUMB_W,
+    borderRadius: R.sm,
     overflow: 'hidden',
-    backgroundColor: C.card,
+    backgroundColor: C.surface,
   },
-  cwPoster: { width: 115, height: 170, borderRadius: R.lg },
+  cwThumb: {
+    width: CW_THUMB_W,
+    height: CW_THUMB_H,
+    borderRadius: R.sm,
+  },
   cwProgressBg: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: C.border,
+    backgroundColor: C.separator,
   },
   cwProgressFill: { height: '100%', backgroundColor: C.accent },
   cwBadge: {
@@ -382,5 +394,5 @@ const st = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: S.xs,
   },
-  cwBadgeText: { color: C.text, ...T.badge },
+  cwBadgeText: { color: C.text, ...T.small, fontWeight: '600' as const },
 });

@@ -1,72 +1,67 @@
-import { Dimensions, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
-// ─── Colors ───
+// ─── Netflix Exact Colors ───
 export const C = {
-  bg: '#0a0a0a',
-  surface: '#141414',
-  elevated: '#1c1c1e',
-  card: '#1a1a1a',
-  border: 'rgba(255,255,255,0.06)',
-  text: '#FFFFFF',
-  text2: 'rgba(255,255,255,0.55)',
-  text3: 'rgba(255,255,255,0.25)',
-  accent: '#E50914',
-  accentDark: '#B20710',
-  yellow: '#FFD60A',
-  green: '#30D158',
-  separator: 'rgba(255,255,255,0.04)',
+  bg: '#141414',          // Netflix uses #141414, NOT pure black
+  black: '#000000',       // Tab bar, player
+  surface: '#282828',     // Cards, modal backgrounds
+  elevated: '#3D3D3D',    // Dividers, inactive elements
+  text: '#FFFFFF',        // Primary text
+  text2: '#999999',       // Secondary/metadata text
+  text3: '#808080',       // Inactive, muted
+  text4: '#505050',       // Very muted, separators
+  accent: '#E50914',      // Netflix red
+  accentDark: '#B20710',  // Pressed state red
+  green: '#46D369',       // Match percentage
+  separator: 'rgba(255,255,255,0.08)',
 } as const;
 
-// ─── Spacing (8pt grid) ───
+// ─── Spacing ───
 export const S = {
   xs: 4,
   sm: 8,
   md: 16,
   lg: 24,
   xl: 32,
-  xxl: 48,
-  // Screen padding — ALWAYS use this for horizontal padding
-  screen: 20,
+  screen: 16,             // Netflix uses 16pt screen margins
+  rowGap: 8,              // Gap between cards in a row
+  sectionGap: 20,         // Vertical gap between content rows
 } as const;
 
 // ─── Radius ───
 export const R = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
+  xs: 4,
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 16,
   pill: 100,
 } as const;
 
 // ─── Layout ───
 export const Layout = {
-  screenW: SCREEN_W,
-  screenH: SCREEN_H,
-  // Safe area top padding (accounts for notch + status bar)
-  safeTop: Platform.OS === 'ios' ? 60 : 44,
-  // Header height
-  headerH: 56,
-  // Tab bar estimated height
-  tabBarH: 85,
-  // Content card sizes
-  posterW: (SCREEN_W - S.screen * 2 - 10 * 2) / 3, // 3 columns
-  posterH: ((SCREEN_W - S.screen * 2 - 10 * 2) / 3) * 1.5,
-  // Carousel card
-  carouselW: SCREEN_W * 0.36,
-  carouselH: SCREEN_W * 0.36 * 1.5,
+  screenW: 0, // Set at runtime
+  screenH: 0,
+  safeTop: Platform.OS === 'ios' ? 56 : 44,
+  tabBarH: 84,
+  // Netflix card: ~3 visible + peek, 2:3 ratio
+  cardW: 110,
+  cardH: 165,
+  // Continue watching: landscape 16:9
+  thumbW: 170,
+  thumbH: 96,
 } as const;
 
-// ─── Typography ───
+// ─── Typography (Netflix uses SF Pro on iOS) ───
 export const T = {
-  hero: { fontSize: 34, fontWeight: '800' as const, color: C.text, letterSpacing: -0.5 },
-  h1: { fontSize: 28, fontWeight: '800' as const, color: C.text },
-  h2: { fontSize: 20, fontWeight: '700' as const, color: C.text },
-  h3: { fontSize: 17, fontWeight: '600' as const, color: C.text },
-  body: { fontSize: 15, fontWeight: '400' as const, color: C.text2, lineHeight: 22 },
-  caption: { fontSize: 13, fontWeight: '500' as const, color: C.text3 },
-  small: { fontSize: 11, fontWeight: '600' as const, color: C.text3 },
-  badge: { fontSize: 10, fontWeight: '700' as const },
+  heroTitle: { fontSize: 32, fontWeight: '700' as const, color: C.text, letterSpacing: -0.3 },
+  sectionTitle: { fontSize: 16, fontWeight: '600' as const, color: C.text },
+  cardTitle: { fontSize: 12, fontWeight: '500' as const, color: C.text2 },
+  body: { fontSize: 14, fontWeight: '400' as const, color: C.text, lineHeight: 20 },
+  caption: { fontSize: 12, fontWeight: '400' as const, color: C.text2 },
+  small: { fontSize: 11, fontWeight: '400' as const, color: C.text3 },
+  button: { fontSize: 15, fontWeight: '600' as const },
+  tabLabel: { fontSize: 10, fontWeight: '400' as const },
+  pageTitle: { fontSize: 28, fontWeight: '700' as const, color: C.text },
+  metadata: { fontSize: 12, fontWeight: '400' as const, color: C.text2 },
 } as const;

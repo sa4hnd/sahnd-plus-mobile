@@ -1,12 +1,16 @@
 import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { GlassView } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { Play, Plus } from 'lucide-react-native';
 import { Movie } from '@/types';
 import { backdrop } from '@/lib/tmdb';
-import { Colors, Spacing, Radius } from '@/lib/theme';
+import { C, S, R, T } from '@/lib/design';
 
-const { width: SCREEN, height: HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const HERO_H = SCREEN_H * 0.55;
 
 interface Props {
   movie: Movie;
@@ -15,42 +19,60 @@ interface Props {
 export default function HeroBanner({ movie }: Props) {
   const router = useRouter();
   const title = movie.title || movie.name || '';
-  const type = movie.media_type === 'tv' || movie.first_air_date ? 'tv' : 'movie';
+  const type =
+    movie.media_type === 'tv' || movie.first_air_date ? 'tv' : 'movie';
   const bg = backdrop(movie.backdrop_path);
 
   return (
-    <View style={styles.container}>
+    <View style={st.container}>
       {bg && (
-        <Image source={{ uri: bg }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} />
+        <Image
+          source={{ uri: bg }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={300}
+        />
       )}
       <LinearGradient
-        colors={['transparent', 'rgba(10,10,10,0.6)', Colors.bg]}
+        colors={['rgba(20,20,20,0.3)', 'transparent', 'rgba(20,20,20,0.7)', C.bg]}
+        locations={[0, 0.3, 0.7, 1]}
         style={StyleSheet.absoluteFill}
       />
-      <LinearGradient
-        colors={['rgba(10,10,10,0.5)', 'transparent', 'transparent']}
-        style={[StyleSheet.absoluteFill, { height: 120 }]}
-      />
 
-      <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={2}>{title}</Text>
-        <Text style={styles.overview} numberOfLines={2}>{movie.overview}</Text>
+      <View style={st.content}>
+        <Text style={st.title} numberOfLines={2}>
+          {title}
+        </Text>
+        <Text style={st.overview} numberOfLines={2}>
+          {movie.overview}
+        </Text>
 
-        <View style={styles.buttons}>
+        <View style={st.buttons}>
           <Pressable
-            onPress={() => router.push(`/watch/${movie.id}?type=${type}` as any)}
-            style={({ pressed }) => [styles.playBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push(`/watch/${movie.id}?type=${type}` as any);
+            }}
+            style={({ pressed }) => [
+              st.playBtn,
+              pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
+            ]}
           >
-            <Text style={styles.playIcon}>▶</Text>
-            <Text style={styles.playText}>Watch Now</Text>
+            <Play size={18} color="#000" fill="#000" strokeWidth={0} />
+            <Text style={st.playText}>Play</Text>
           </Pressable>
 
           <Pressable
-            onPress={() => router.push(`/${type}/${movie.id}` as any)}
-            style={({ pressed }) => [styles.detailBtn, pressed && { opacity: 0.8 }]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push(`/${type}/${movie.id}` as any);
+            }}
+            style={({ pressed }) => [pressed && { opacity: 0.8 }]}
           >
-            <Text style={styles.detailText}>Details</Text>
-            <Text style={styles.detailText}>›</Text>
+            <GlassView style={st.listBtn} glassEffectStyle="regular" isInteractive>
+              <Plus size={18} color={C.text} strokeWidth={2} />
+              <Text style={st.listText}>My List</Text>
+            </GlassView>
           </Pressable>
         </View>
       </View>
@@ -58,52 +80,55 @@ export default function HeroBanner({ movie }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   container: {
-    width: SCREEN,
-    height: HEIGHT * 0.55,
+    width: SCREEN_W,
+    height: HERO_H,
     justifyContent: 'flex-end',
   },
   content: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.lg,
+    paddingHorizontal: S.screen,
+    paddingBottom: S.lg,
   },
   title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.5,
-    marginBottom: 8,
+    ...T.heroTitle,
+    lineHeight: 36,
+    marginBottom: S.sm,
   },
   overview: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.65)',
-    lineHeight: 20,
-    marginBottom: Spacing.md,
+    ...T.caption,
+    color: C.text2,
+    lineHeight: 19,
+    marginBottom: S.md,
   },
   buttons: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: 10,
   },
   playBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fff',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: Radius.full,
+    gap: S.sm,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 28,
+    paddingVertical: 13,
+    borderRadius: R.pill,
   },
-  playIcon: { fontSize: 12, color: '#000' },
-  playText: { fontSize: 15, fontWeight: '700', color: '#000' },
-  detailBtn: {
+  playText: {
+    ...T.button,
+    color: '#000000',
+  },
+  listBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: S.sm,
     backgroundColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: Radius.full,
+    paddingVertical: 13,
+    borderRadius: R.pill,
   },
-  detailText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  listText: {
+    ...T.button,
+    color: C.text,
+  },
 });
