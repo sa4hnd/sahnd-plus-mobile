@@ -107,8 +107,8 @@ export default function SearchTab() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  header: { paddingTop: 60, paddingHorizontal: 16, paddingBottom: 12 },
-  title: { fontSize: 32, fontWeight: '800', color: Colors.text, marginBottom: 12 },
+  header: { paddingTop: 64, paddingHorizontal: 20, paddingBottom: 12 },
+  title: { fontSize: 32, fontWeight: '800', color: Colors.text, marginBottom: 16 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingHorizontal: 12 },
   inputIcon: { fontSize: 14, color: Colors.textMuted, marginRight: 8 },
   input: { flex: 1, height: 46, color: '#fff', fontSize: 16 },

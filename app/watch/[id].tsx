@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -25,6 +26,7 @@ export default function WatchScreen() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [watchedEps, setWatchedEps] = useState<Set<number>>(new Set());
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [useWebView, setUseWebView] = useState(false);
   const [streamError, setStreamError] = useState('');
   const [loading, setLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
@@ -127,6 +129,13 @@ export default function WatchScreen() {
     router.replace(`/watch/${tmdbId}?type=tv&s=${ep.season_number}&e=${ep.episode_number}` as any);
   };
 
+  // VixSrc embed URL (fallback when native m3u8 fails)
+  const getEmbedUrl = () => {
+    let url = `https://vixsrc.to/${mediaType}/${tmdbId}`;
+    if (mediaType === 'tv' && season && episode) url = `https://vixsrc.to/tv/${tmdbId}/${season}/${episode}`;
+    return `${url}?primaryColor=E50914&secondaryColor=B20710&autoplay=true`;
+  };
+
   return (
     <View style={s.container}>
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
@@ -149,14 +158,14 @@ export default function WatchScreen() {
         ) : <View style={{ width: 44 }} />}
       </View>
 
-      {/* ─── NATIVE VIDEO PLAYER ─── */}
+      {/* ─── PLAYER ─── */}
       <View style={s.playerWrap}>
         {loading ? (
           <View style={s.playerOverlay}>
             <ActivityIndicator color="#fff" size="large" />
             <Text style={s.playerText}>Loading stream...</Text>
           </View>
-        ) : streamUrl ? (
+        ) : streamUrl && !useWebView ? (
           <VideoView
             player={player}
             style={s.nativePlayer}
@@ -164,13 +173,42 @@ export default function WatchScreen() {
             allowsPictureInPicture
             nativeControls
           />
+        ) : useWebView ? (
+          <WebView
+            source={{ uri: getEmbedUrl() }}
+            style={{ flex: 1, backgroundColor: '#000' }}
+            allowsFullscreenVideo
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            javaScriptEnabled
+            injectedJavaScript={`
+              window.open = function() { return null; };
+              setInterval(function() {
+                document.querySelectorAll('a[target="_blank"]').forEach(function(el) { el.remove(); });
+                document.querySelectorAll('div').forEach(function(el) {
+                  var z = parseInt(window.getComputedStyle(el).zIndex || 0);
+                  if (z > 999 && !el.querySelector('video')) el.style.display = 'none';
+                });
+              }, 1500);
+              true;
+            `}
+            onShouldStartLoadWithRequest={(req) => {
+              const embedHost = new URL(getEmbedUrl()).hostname;
+              return req.url.includes(embedHost) || req.url === getEmbedUrl();
+            }}
+          />
         ) : (
           <View style={s.playerOverlay}>
-            <Text style={[s.playerText, { color: Colors.accent }]}>Stream unavailable</Text>
+            <Text style={[s.playerText, { color: Colors.accent, fontSize: 14 }]}>Native stream unavailable</Text>
             <Text style={[s.playerText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text>
-            <Pressable onPress={() => { setLoading(true); setStreamError(''); fetchStream(mediaType, tmdbId, season, episode).then(r => { setStreamUrl(r.m3u8); setLoading(false); }).catch(e => { setStreamError(e.message); setLoading(false); }); }} style={s.retryBtn}>
-              <Text style={s.retryText}>Retry</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <Pressable onPress={() => setUseWebView(true)} style={s.retryBtn}>
+                <Text style={s.retryText}>Use Embedded Player</Text>
+              </Pressable>
+              <Pressable onPress={() => { setLoading(true); setStreamError(''); fetchStream(mediaType, tmdbId, season, episode).then(r => { setStreamUrl(r.m3u8); setLoading(false); }).catch(e => { setStreamError(e.message); setLoading(false); }); }} style={[s.retryBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+                <Text style={s.retryText}>Retry Native</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, Alert, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, useFocusEffect, Stack } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { getWatchlist, removeFromWatchlist } from '@/lib/storage';
 import { img } from '@/lib/tmdb';
@@ -11,7 +11,8 @@ import { WatchlistItem } from '@/types';
 const { width: W } = Dimensions.get('window');
 const COLS = 2;
 const GAP = 12;
-const CARD_W = (W - 32 - GAP) / COLS;
+const PAD = 20;
+const CARD_W = (W - PAD * 2 - GAP) / COLS;
 
 export default function MyListTab() {
   const router = useRouter();
@@ -33,8 +34,13 @@ export default function MyListTab() {
   if (loading) return <View style={st.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <Stack.Screen options={{ headerShown: true, title: 'My List', headerStyle: { backgroundColor: Colors.bg }, headerTintColor: '#fff', headerLargeTitle: true }} />
+    <View style={st.container}>
+      {/* Custom header instead of Stack.Screen header */}
+      <View style={st.header}>
+        <Text style={st.headerTitle}>My List</Text>
+        <Text style={st.headerCount}>{items.length} title{items.length !== 1 ? 's' : ''}</Text>
+      </View>
+
       {items.length > 0 ? (
         <FlatList
           data={items}
@@ -44,24 +50,25 @@ export default function MyListTab() {
             <Pressable
               onPress={() => { Haptics.selectionAsync(); router.push(`/${item.type}/${item.id}` as any); }}
               onLongPress={() => remove(item)}
-              style={{ width: CARD_W, marginBottom: GAP }}
+              style={({ pressed }) => [st.card, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
             >
-              <Image source={{ uri: img(item.poster_path, 'w342')! }} style={{ width: CARD_W, height: CARD_W * 1.5, borderRadius: Radius.lg }} contentFit="cover" />
-              <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 6 }} numberOfLines={1}>{item.title}</Text>
-              <View style={{ flexDirection: 'row', gap: 4, marginTop: 2 }}>
-                <Text style={{ color: Colors.textMuted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>{item.type}</Text>
-                <Text style={{ color: Colors.yellow, fontSize: 10 }}>★ {item.vote_average.toFixed(1)}</Text>
+              <Image source={{ uri: img(item.poster_path, 'w342')! }} style={st.poster} contentFit="cover" />
+              <Text style={st.cardTitle} numberOfLines={1}>{item.title}</Text>
+              <View style={st.cardMeta}>
+                <Text style={st.cardType}>{item.type.toUpperCase()}</Text>
+                <Text style={st.cardRating}>★ {item.vote_average.toFixed(1)}</Text>
               </View>
             </Pressable>
           )}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={st.listContent}
           columnWrapperStyle={{ gap: GAP }}
+          showsVerticalScrollIndicator={false}
         />
       ) : (
         <View style={st.empty}>
-          <Text style={{ fontSize: 48, marginBottom: 16 }}>📑</Text>
-          <Text style={{ color: Colors.text, fontSize: 20, fontWeight: '700', marginBottom: 4 }}>Your list is empty</Text>
-          <Text style={{ color: Colors.textMuted, fontSize: 14 }}>Movies and series you save will appear here</Text>
+          <Text style={st.emptyIcon}>📑</Text>
+          <Text style={st.emptyTitle}>Your list is empty</Text>
+          <Text style={st.emptyText}>Movies and series you save will appear here</Text>
         </View>
       )}
     </View>
@@ -70,5 +77,19 @@ export default function MyListTab() {
 
 const st = StyleSheet.create({
   center: { flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center' },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 },
+  container: { flex: 1, backgroundColor: Colors.bg },
+  header: { paddingTop: 64, paddingHorizontal: PAD, paddingBottom: 16 },
+  headerTitle: { fontSize: 32, fontWeight: '800', color: '#fff', marginBottom: 4 },
+  headerCount: { fontSize: 14, color: Colors.textMuted },
+  listContent: { paddingHorizontal: PAD, paddingBottom: 100 },
+  card: { width: CARD_W, marginBottom: GAP + 4 },
+  poster: { width: CARD_W, height: CARD_W * 1.5, borderRadius: Radius.lg },
+  cardTitle: { color: Colors.textSecondary, fontSize: 13, fontWeight: '500', marginTop: 8 },
+  cardMeta: { flexDirection: 'row', gap: 6, marginTop: 3 },
+  cardType: { color: Colors.textMuted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  cardRating: { color: Colors.yellow, fontSize: 10, fontWeight: '700' },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 80 },
+  emptyIcon: { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  emptyText: { color: Colors.textMuted, fontSize: 14 },
 });
