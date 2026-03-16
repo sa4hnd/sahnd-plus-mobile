@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, SkipForward, Check } from 'lucide-react-native';
+import { ChevronLeft, SkipForward, Check, Play, ChevronDown } from 'lucide-react-native';
 import SahndPlayer from '@/components/SahndPlayer';
 import { fetchStream } from '@/lib/streamApi';
 import { addToHistory, markWatched, updateProgress, isWatched as checkWatched, getProgress } from '@/lib/storage';
 import { movieDetail, tvDetail, seasonDetail, img } from '@/lib/tmdb';
-import { Colors, Radius } from '@/lib/theme';
+import { C, S, R, T } from '@/lib/design';
 import { MovieDetail, Episode } from '@/types';
 
 const { width: W } = Dimensions.get('window');
@@ -29,8 +29,8 @@ export default function WatchScreen() {
   const [useWebView, setUseWebView] = useState(false);
   const [streamError, setStreamError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [autoNext, setAutoNext] = useState(true);
-  const [savedPosition, setSavedPosition] = useState(0); // resume seconds
+  const [savedPosition, setSavedPosition] = useState(0);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   const title = detail?.title || detail?.name || '';
   const currentEp = episodes.find(ep => ep.episode_number === episode);
@@ -45,11 +45,9 @@ export default function WatchScreen() {
 
     const load = async () => {
       try {
-        // Fetch detail
         const d = mediaType === 'movie' ? await movieDetail(tmdbId) : await tvDetail(tmdbId);
         setDetail(d);
 
-        // Save to history
         await addToHistory({
           id: tmdbId, type: mediaType, title: d.title || d.name || '',
           poster_path: d.poster_path, backdrop_path: d.backdrop_path,
@@ -57,7 +55,6 @@ export default function WatchScreen() {
           season, episode,
         });
 
-        // Load episodes for TV
         if (mediaType === 'tv' && season) {
           try {
             const sd = await seasonDetail(tmdbId, season);
@@ -72,14 +69,12 @@ export default function WatchScreen() {
           } catch {}
         }
 
-        // Get saved position for resume
         const savedPct = await getProgress(tmdbId, mediaType, season, episode);
         if (savedPct > 0 && savedPct < 95) {
           const runtimeSec = (currentEp?.runtime || d.runtime || 45) * 60;
           setSavedPosition(Math.floor((savedPct / 100) * runtimeSec));
         }
 
-        // Fetch native stream URL
         const stream = await fetchStream(mediaType, tmdbId, season, episode);
         console.log('[Watch] Got native stream:', stream.m3u8.slice(0, 60));
         setStreamUrl(stream.m3u8);
@@ -93,7 +88,6 @@ export default function WatchScreen() {
     load();
   }, [tmdbId, mediaType, season, episode]);
 
-  // Player callbacks
   const handlePlayerProgress = (seconds: number, dur: number) => {
     if (dur > 0) {
       const pct = Math.min(Math.round((seconds / dur) * 100), 100);
@@ -103,7 +97,7 @@ export default function WatchScreen() {
 
   const handlePlayerComplete = () => {
     markWatched(tmdbId, mediaType, season, episode);
-    if (autoNext && nextEp) goToEp(nextEp);
+    if (nextEp) goToEp(nextEp);
   };
 
   const goToEp = (ep: Episode) => {
@@ -111,42 +105,34 @@ export default function WatchScreen() {
     router.replace(`/watch/${tmdbId}?type=tv&s=${ep.season_number}&e=${ep.episode_number}` as any);
   };
 
-  // VixSrc embed URL (fallback when native m3u8 fails)
   const getEmbedUrl = () => {
     let url = `https://vixsrc.to/${mediaType}/${tmdbId}`;
     if (mediaType === 'tv' && season && episode) url = `https://vixsrc.to/tv/${tmdbId}/${season}/${episode}`;
     return `${url}?primaryColor=E50914&secondaryColor=B20710&autoplay=true`;
   };
 
+  const year = detail?.release_date?.slice(0, 4) || detail?.first_air_date?.slice(0, 4);
+  const genres = detail?.genres?.slice(0, 3).map((g: any) => g.name) || [];
+
   return (
-    <View style={s.container}>
+    <View style={st.container}>
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
 
-      {/* Header */}
-      <View style={s.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={s.headerBtn}>
-          <ChevronLeft size={22} color="#fff" strokeWidth={2.5} />
-        </Pressable>
-        <View style={s.headerCenter}>
-          <Text style={s.headerTitle} numberOfLines={1}>{title}</Text>
-          {season != null && episode != null && (
-            <Text style={s.headerSub}>S{season} · E{episode}{currentEp ? ` · ${currentEp.name}` : ''}</Text>
-          )}
-        </View>
-        {nextEp ? (
-          <Pressable onPress={() => goToEp(nextEp)} hitSlop={8} style={s.headerBtn}>
-            <SkipForward size={18} color="#fff" strokeWidth={2} />
-          </Pressable>
-        ) : <View style={{ width: 44 }} />}
-      </View>
-
-      {/* ─── PLAYER ─── */}
+      {/* ── PLAYER ── */}
       {loading ? (
-        <View style={s.playerWrap}>
-          <View style={s.playerOverlay}>
-            <ActivityIndicator color="#fff" size="large" />
-            <Text style={s.playerText}>Loading stream...</Text>
+        <View style={st.playerArea}>
+          <View style={st.playerBackdrop}>
+            {detail?.backdrop_path && (
+              <Image source={{ uri: img(detail.backdrop_path, 'w780')! }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            )}
+            <View style={st.playerOverlay}>
+              <ActivityIndicator color="#fff" size="large" />
+              <Text style={st.loadingText}>Loading stream…</Text>
+            </View>
           </View>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
+            <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
+          </Pressable>
         </View>
       ) : streamUrl && !useWebView ? (
         <SahndPlayer
@@ -157,11 +143,9 @@ export default function WatchScreen() {
           onProgress={handlePlayerProgress}
           onComplete={handlePlayerComplete}
           onBack={() => router.back()}
-          onNextEpisode={nextEp ? () => goToEp(nextEp) : undefined}
-          hasNextEpisode={!!nextEp}
         />
       ) : useWebView ? (
-        <View style={s.playerWrap}>
+        <View style={st.playerArea}>
           <WebView
             source={{ uri: getEmbedUrl() }}
             style={{ flex: 1, backgroundColor: '#000' }}
@@ -172,88 +156,152 @@ export default function WatchScreen() {
             injectedJavaScript={`window.open=function(){return null};setInterval(function(){document.querySelectorAll('a[target="_blank"]').forEach(function(e){e.remove()})},1500);true;`}
             onShouldStartLoadWithRequest={(req) => req.url.includes(new URL(getEmbedUrl()).hostname)}
           />
+          <Pressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
+            <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
+          </Pressable>
         </View>
       ) : (
-        <View style={s.playerWrap}>
-          <View style={s.playerOverlay}>
-            <Text style={[s.playerText, { color: Colors.accent, fontSize: 14 }]}>Stream unavailable</Text>
-            <Text style={[s.playerText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text>
+        <View style={st.playerArea}>
+          <View style={st.playerOverlay}>
+            <Text style={[st.loadingText, { color: C.accent, fontSize: 14 }]}>Stream unavailable</Text>
+            <Text style={[st.loadingText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <Pressable onPress={() => setUseWebView(true)} style={s.retryBtn}>
-                <Text style={s.retryText}>Use Embedded Player</Text>
+              <Pressable onPress={() => setUseWebView(true)} style={st.fallbackBtn}>
+                <Text style={st.fallbackText}>Use Embedded Player</Text>
               </Pressable>
-              <Pressable onPress={() => { setLoading(true); setStreamError(''); fetchStream(mediaType, tmdbId, season, episode).then(r => { setStreamUrl(r.m3u8); setLoading(false); }).catch(e => { setStreamError(e.message); setLoading(false); }); }} style={[s.retryBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
-                <Text style={s.retryText}>Retry</Text>
+              <Pressable
+                onPress={() => {
+                  setLoading(true); setStreamError('');
+                  fetchStream(mediaType, tmdbId, season, episode)
+                    .then(r => { setStreamUrl(r.m3u8); setLoading(false); })
+                    .catch(e => { setStreamError(e.message); setLoading(false); });
+                }}
+                style={[st.fallbackBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
+              >
+                <Text style={st.fallbackText}>Retry</Text>
               </Pressable>
             </View>
           </View>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
+            <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
+          </Pressable>
         </View>
       )}
 
-      {/* Content below player */}
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {/* Info */}
-        <View style={s.info}>
-          <Text style={s.infoTitle}>{title}</Text>
-          <View style={s.metaRow}>
-            {detail?.vote_average ? <Text style={s.metaY}>★ {detail.vote_average.toFixed(1)}</Text> : null}
-            {detail?.release_date && <Text style={s.metaG}>{detail.release_date.slice(0, 4)}</Text>}
-            {detail?.first_air_date && <Text style={s.metaG}>{detail.first_air_date.slice(0, 4)}</Text>}
-            {runtime > 0 && <Text style={s.metaG}>{runtime}min</Text>}
+      {/* ── Content ── */}
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+
+        {/* Title & Metadata */}
+        <View style={st.infoSection}>
+          <Text style={st.title}>{title}</Text>
+
+          <View style={st.metaRow}>
+            {detail?.vote_average ? (
+              <View style={st.ratingBadge}>
+                <Text style={st.ratingText}>★ {detail.vote_average.toFixed(1)}</Text>
+              </View>
+            ) : null}
+            {year && <Text style={st.metaText}>{year}</Text>}
+            {runtime > 0 && (
+              <View style={st.metaPill}>
+                <Text style={st.metaPillText}>{runtime}min</Text>
+              </View>
+            )}
+            {season != null && episode != null && (
+              <Text style={st.metaText}>S{season} E{episode}</Text>
+            )}
           </View>
-          <Text style={s.overview} numberOfLines={3}>{detail?.overview}</Text>
+
+          {genres.length > 0 && (
+            <View style={st.genreRow}>
+              {genres.map((g: string, i: number) => (
+                <View key={g} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {i > 0 && <View style={st.genreDot} />}
+                  <Text style={st.genreText}>{g}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Description */}
+          <Pressable onPress={() => setDescExpanded(!descExpanded)}>
+            <Text style={st.overview} numberOfLines={descExpanded ? undefined : 3}>
+              {detail?.overview}
+            </Text>
+            {detail?.overview && detail.overview.length > 120 && (
+              <View style={st.expandRow}>
+                <ChevronDown size={14} color={C.text2} style={descExpanded ? { transform: [{ rotate: '180deg' }] } : undefined} />
+              </View>
+            )}
+          </Pressable>
         </View>
 
-        {/* Auto-next */}
-        {mediaType === 'tv' && (
-          <Pressable onPress={() => { Haptics.selectionAsync(); setAutoNext(!autoNext); }} style={s.toggleRow}>
-            <Text style={s.toggleLabel}>Auto-play next episode</Text>
-            <View style={[s.toggle, autoNext && s.toggleOn]}><View style={[s.knob, autoNext && s.knobOn]} /></View>
-          </Pressable>
-        )}
-
-        {/* Next ep CTA */}
+        {/* Next Episode CTA */}
         {nextEp && (
-          <Pressable onPress={() => goToEp(nextEp)} style={({ pressed }) => [s.nextCta, pressed && { opacity: 0.9 }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.nextCtaLabel}>Next Episode</Text>
-              <Text style={s.nextCtaTitle}>{nextEp.episode_number}. {nextEp.name}</Text>
-            </View>
-            <SkipForward size={18} color="#000" />
-          </Pressable>
+          <View style={st.actionSection}>
+            <Pressable
+              onPress={() => goToEp(nextEp)}
+              style={({ pressed }) => [st.nextBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+            >
+              <Play size={16} color="#000" fill="#000" strokeWidth={0} />
+              <View style={{ flex: 1 }}>
+                <Text style={st.nextLabel}>Next Episode</Text>
+                <Text style={st.nextTitle}>{nextEp.episode_number}. {nextEp.name}</Text>
+              </View>
+              <SkipForward size={16} color="rgba(0,0,0,0.4)" />
+            </Pressable>
+          </View>
         )}
 
-        {/* Episodes */}
+        {/* Episodes List */}
         {mediaType === 'tv' && episodes.length > 0 && (
-          <View style={s.epSection}>
-            <View style={s.epHeader}>
-              <Text style={s.epHeaderTitle}>Season {season}</Text>
-              <Text style={s.epHeaderCount}>{watchedEps.size}/{episodes.length} watched</Text>
+          <View style={st.epSection}>
+            <View style={st.epSectionHeader}>
+              <Text style={st.epSectionTitle}>Season {season}</Text>
+              <Text style={st.epWatchedCount}>{watchedEps.size}/{episodes.length} watched</Text>
             </View>
+
             {episodes.map(ep => {
               const isActive = ep.episode_number === episode;
               const isWatchedEp = watchedEps.has(ep.episode_number);
               return (
-                <Pressable key={ep.id} onPress={() => goToEp(ep)} style={({ pressed }) => [s.epRow, isActive && s.epActive, pressed && { opacity: 0.7 }]}>
-                  <View style={s.epThumb}>
+                <Pressable
+                  key={ep.id}
+                  onPress={() => goToEp(ep)}
+                  style={({ pressed }) => [st.epRow, isActive && st.epRowActive, pressed && { opacity: 0.7 }]}
+                >
+                  <View style={st.epThumb}>
                     {ep.still_path ? (
                       <Image source={{ uri: img(ep.still_path, 'w300')! }} style={StyleSheet.absoluteFill} contentFit="cover" />
                     ) : (
-                      <View style={s.epThumbEmpty}><Text style={{ color: '#333' }}>▶</Text></View>
+                      <View style={st.epThumbEmpty}><Play size={16} color={C.text3} /></View>
                     )}
                     {isActive && (
-                      <View style={s.epPlayingOverlay}>
-                        <View style={[s.eqBar, { height: 10 }]} /><View style={[s.eqBar, { height: 14 }]} /><View style={[s.eqBar, { height: 8 }]} />
+                      <View style={st.epPlayingOverlay}>
+                        <View style={[st.eqBar, { height: 10 }]} />
+                        <View style={[st.eqBar, { height: 16 }]} />
+                        <View style={[st.eqBar, { height: 8 }]} />
                       </View>
                     )}
-                    {ep.runtime > 0 && <View style={s.epDurBadge}><Text style={s.epDurText}>{ep.runtime}m</Text></View>}
+                    {ep.runtime > 0 && (
+                      <View style={st.epDurBadge}>
+                        <Text style={st.epDurText}>{ep.runtime}m</Text>
+                      </View>
+                    )}
                   </View>
-                  <View style={s.epInfo}>
-                    <View style={s.epNameRow}>
-                      {isWatchedEp ? <Check size={14} color="#30D158" strokeWidth={3} /> : <Text style={[s.epNum, isActive && { color: Colors.accent }]}>{ep.episode_number}</Text>}
-                      <Text style={[s.epName, isActive && { color: Colors.accent }, isWatchedEp && { color: Colors.textMuted }]} numberOfLines={1}>{ep.name}</Text>
+
+                  <View style={st.epInfo}>
+                    <View style={st.epNameRow}>
+                      {isWatchedEp ? (
+                        <Check size={14} color={C.green} strokeWidth={3} />
+                      ) : (
+                        <Text style={[st.epNum, isActive && { color: C.accent }]}>{ep.episode_number}</Text>
+                      )}
+                      <Text style={[st.epName, isActive && { color: C.accent }, isWatchedEp && { color: C.text3 }]} numberOfLines={1}>
+                        {ep.name}
+                      </Text>
                     </View>
-                    <Text style={s.epDesc} numberOfLines={2}>{ep.overview}</Text>
+                    <Text style={st.epDesc} numberOfLines={2}>{ep.overview}</Text>
                   </View>
                 </Pressable>
               );
@@ -261,77 +309,115 @@ export default function WatchScreen() {
           </View>
         )}
 
-        {/* Similar */}
+        {/* More Like This */}
         {detail?.similar?.results && detail.similar.results.length > 0 && (
-          <View style={{ marginTop: 24, paddingBottom: 40 }}>
-            <Text style={[s.epHeaderTitle, { paddingHorizontal: 20, marginBottom: 12 }]}>More Like This</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
+          <View style={st.similarSection}>
+            <Text style={st.similarTitle}>More Like This</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: S.screen, gap: S.rowGap }}>
               {detail.similar.results.slice(0, 12).map((m: any) => (
-                <Pressable key={m.id} onPress={() => router.push(`/${mediaType}/${m.id}` as any)} style={{ width: 110 }}>
-                  <Image source={{ uri: img(m.poster_path, 'w185')! }} style={{ width: 110, height: 165, borderRadius: 12 }} contentFit="cover" />
+                <Pressable
+                  key={m.id}
+                  onPress={() => router.push(`/${mediaType}/${m.id}` as any)}
+                  style={({ pressed }) => [st.similarCard, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+                >
+                  <Image source={{ uri: img(m.poster_path, 'w185')! }} style={st.similarPoster} contentFit="cover" />
                 </Pressable>
               ))}
             </ScrollView>
           </View>
         )}
-        <View style={{ height: 50 }} />
       </ScrollView>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 58, paddingHorizontal: 12, paddingBottom: 10, backgroundColor: Colors.bg },
-  headerBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
-  headerTitle: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  headerSub: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
-  playerWrap: { width: W, aspectRatio: 16 / 9, backgroundColor: '#000' },
-  nativePlayer: { width: '100%', height: '100%' },
-  playerOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 10, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  playerText: { color: Colors.textMuted, fontSize: 13, marginTop: 10 },
-  retryBtn: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' },
-  retryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  progressBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.08)', zIndex: 20 },
-  progressFill: { height: '100%', backgroundColor: Colors.accent },
-  nextOverlay: { position: 'absolute', bottom: 12, right: 12, zIndex: 30, backgroundColor: 'rgba(0,0,0,0.92)', borderRadius: 10, padding: 12, maxWidth: 220, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  nextLabel: { color: Colors.textMuted, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
-  nextTitle: { color: '#fff', fontSize: 13, fontWeight: '600', marginBottom: 8 },
-  nextBtns: { flexDirection: 'row', gap: 8 },
-  nextPlayBtn: { backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6 },
-  nextPlayText: { color: '#000', fontSize: 12, fontWeight: '700' },
-  nextCancelBtn: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.1)' },
-  info: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  infoTitle: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 6 },
-  metaRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
-  metaY: { color: '#FFD60A', fontSize: 13, fontWeight: '700' },
-  metaG: { color: Colors.textSecondary, fontSize: 13 },
-  overview: { color: Colors.textSecondary, fontSize: 13, lineHeight: 20 },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' },
-  toggleLabel: { color: Colors.textSecondary, fontSize: 14 },
-  toggle: { width: 48, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', paddingHorizontal: 2 },
-  toggleOn: { backgroundColor: Colors.accent },
-  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff' },
-  knobOn: { alignSelf: 'flex-end' },
-  nextCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginVertical: 12, padding: 16, borderRadius: Radius.lg, backgroundColor: '#fff' },
-  nextCtaLabel: { color: 'rgba(0,0,0,0.4)', fontSize: 11, fontWeight: '600', marginBottom: 2 },
-  nextCtaTitle: { color: '#000', fontSize: 15, fontWeight: '700' },
-  epSection: { paddingHorizontal: 20 },
-  epHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  epHeaderTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  epHeaderCount: { fontSize: 12, color: Colors.textMuted },
-  epRow: { flexDirection: 'row', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.04)' },
-  epActive: { backgroundColor: 'rgba(229,9,20,0.06)', marginHorizontal: -12, paddingHorizontal: 12, borderRadius: 10, borderBottomWidth: 0 },
-  epThumb: { width: 130, height: 73, borderRadius: 8, overflow: 'hidden', backgroundColor: '#1a1a1a' },
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg },
+
+  // ─── Player ───
+  playerArea: { width: W, aspectRatio: 16 / 9, backgroundColor: '#000' },
+  playerBackdrop: { flex: 1, backgroundColor: '#000' },
+  playerOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  loadingText: { color: C.text3, fontSize: 13, marginTop: 10 },
+  backBtn: {
+    position: 'absolute', top: 56, left: 12, zIndex: 20,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  fallbackBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: R.pill, backgroundColor: 'rgba(255,255,255,0.1)' },
+  fallbackText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  // ─── Info ───
+  infoSection: { paddingHorizontal: S.screen, paddingTop: 32, paddingBottom: S.sm },
+  title: { fontSize: 22, fontWeight: '700', color: C.text, lineHeight: 28, marginBottom: S.sm },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: S.sm },
+  ratingBadge: {
+    backgroundColor: 'rgba(255,214,10,0.12)',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
+  },
+  ratingText: { color: '#FFD60A', fontSize: 13, fontWeight: '700' },
+  metaText: { ...T.caption, color: C.text2 },
+  metaPill: {
+    backgroundColor: C.separator, paddingHorizontal: 8, paddingVertical: 2, borderRadius: R.xs,
+  },
+  metaPillText: { ...T.small, color: C.text2 },
+  genreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: S.md },
+  genreDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.text4, marginHorizontal: 8 },
+  genreText: { ...T.caption, color: C.text3 },
+  overview: { ...T.body, color: C.text2, lineHeight: 21 },
+  expandRow: { alignItems: 'center', paddingTop: 4 },
+
+  // ─── Next Episode ───
+  actionSection: { paddingHorizontal: S.screen, marginBottom: S.sm },
+  nextBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: S.md, paddingVertical: 14,
+    borderRadius: R.pill,
+  },
+  nextLabel: { color: 'rgba(0,0,0,0.4)', fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
+  nextTitle: { color: '#000', fontSize: 14, fontWeight: '700' },
+
+  // ─── Episodes ───
+  epSection: { paddingHorizontal: S.screen, marginTop: S.sm },
+  epSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: S.md },
+  epSectionTitle: { ...T.sectionTitle, fontSize: 18, fontWeight: '700' },
+  epWatchedCount: { ...T.small, color: C.text3 },
+  epRow: {
+    flexDirection: 'row', gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.separator,
+  },
+  epRowActive: {
+    backgroundColor: 'rgba(229,9,20,0.06)',
+    marginHorizontal: -12, paddingHorizontal: 12,
+    borderRadius: R.md, borderBottomWidth: 0,
+  },
+  epThumb: { width: 130, height: 73, borderRadius: R.sm, overflow: 'hidden', backgroundColor: C.surface },
   epThumbEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  epPlayingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 2 },
-  eqBar: { width: 3, backgroundColor: Colors.accent, borderRadius: 2 },
-  epDurBadge: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  epPlayingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 2,
+  },
+  eqBar: { width: 3, backgroundColor: C.accent, borderRadius: 2 },
+  epDurBadge: {
+    position: 'absolute', bottom: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: R.xs,
+  },
   epDurText: { color: '#fff', fontSize: 9, fontWeight: '600' },
   epInfo: { flex: 1, justifyContent: 'center' },
   epNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  epNum: { color: Colors.textMuted, fontSize: 13, fontWeight: '700', width: 18 },
-  epName: { flex: 1, color: '#fff', fontSize: 14, fontWeight: '600' },
-  epDesc: { color: Colors.textMuted, fontSize: 12, lineHeight: 17 },
+  epNum: { color: C.text3, fontSize: 13, fontWeight: '700', width: 18 },
+  epName: { flex: 1, color: C.text, fontSize: 14, fontWeight: '600' },
+  epDesc: { ...T.small, color: C.text3, lineHeight: 17 },
+
+  // ─── Similar ───
+  similarSection: { marginTop: S.lg, paddingBottom: S.md },
+  similarTitle: { ...T.sectionTitle, fontSize: 18, fontWeight: '700', paddingHorizontal: S.screen, marginBottom: S.md },
+  similarCard: { width: 110 },
+  similarPoster: { width: 110, height: 165, borderRadius: R.md },
 });
