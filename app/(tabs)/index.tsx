@@ -8,7 +8,7 @@ import { GlassView } from 'expo-glass-effect';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Search, Play, Plus } from 'lucide-react-native';
+import { Search, Play, Plus, Bookmark } from 'lucide-react-native';
 import {
   trending, popularMovies, topRatedMovies,
   nowPlayingMovies, popularTV, img,
@@ -126,17 +126,24 @@ export default function HomeScreen() {
             style={st.logo}
             contentFit="contain"
           />
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push('/(tabs)/search' as any);
-            }}
-            hitSlop={8}
-          >
-            <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
-              <Search size={22} color={C.text} strokeWidth={2} />
-            </GlassView>
-          </Pressable>
+          <View style={st.topIcons}>
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); router.push('/watchlist' as any); }}
+              hitSlop={8}
+            >
+              <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
+                <Bookmark size={20} color={C.text} strokeWidth={2} />
+              </GlassView>
+            </Pressable>
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); router.push('/search' as any); }}
+              hitSlop={8}
+            >
+              <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
+                <Search size={20} color={C.text} strokeWidth={2} />
+              </GlassView>
+            </Pressable>
+          </View>
         </View>
 
         {/* Hero content */}
@@ -288,6 +295,7 @@ const st = StyleSheet.create({
     paddingHorizontal: S.screen,
   },
   logo: { width: 120, height: 32 },
+  topIcons: { flexDirection: 'row', gap: 10 },
   topIconBtn: {
     width: 40,
     height: 40,

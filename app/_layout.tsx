@@ -12,7 +12,8 @@ export default function RootLayout() {
         <Stack.Screen name="tv/[id]" />
         <Stack.Screen name="watch/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
         <Stack.Screen name="genre/[id]" />
-        <Stack.Screen name="search/index" />
+        <Stack.Screen name="search/index" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="watchlist/index" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </ThemeProvider>
   );
