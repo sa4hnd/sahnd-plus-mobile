@@ -8,7 +8,7 @@
     "scheme": "sahndplus",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/icon.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#0a0a0a"
     },

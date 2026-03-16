@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, RefreshControl, ActivityIndicator,
-  StyleSheet, Pressable,
+  StyleSheet, Pressable, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { GlassView } from 'expo-glass-effect';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -126,23 +127,24 @@ export default function HomeScreen() {
               router.push('/(tabs)/search' as any);
             }}
             hitSlop={8}
-            style={st.topIconBtn}
           >
-            <Search size={22} color={C.text} strokeWidth={2} />
+            <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
+              <Search size={22} color={C.text} strokeWidth={2} />
+            </GlassView>
           </Pressable>
         </View>
 
         {/* Hero content */}
         <View style={st.heroContent}>
           {lastWatched && (
-            <View style={st.heroBadge}>
+            <GlassView style={st.heroBadge} glassEffectStyle="regular">
               <Text style={st.heroBadgeText}>
                 {heroIsResume ? 'Continue Watching' : 'Last Watched'}
                 {lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
                   ? ` \u00b7 S${lastWatched.season} E${lastWatched.episode}`
                   : ''}
               </Text>
-            </View>
+            </GlassView>
           )}
           <Text style={st.heroTitle} numberOfLines={2}>{heroTitle}</Text>
           {heroItem && 'overview' in heroItem && (
@@ -179,11 +181,12 @@ export default function HomeScreen() {
                 router.push(`/${heroType}/${heroItem?.id}` as any);
               }}
               style={({ pressed }) => [
-                st.heroInfoBtn,
                 pressed && { opacity: 0.8 },
               ]}
             >
-              <Text style={st.heroInfoText}>Details</Text>
+              <GlassView style={st.heroInfoBtn} glassEffectStyle="regular" isInteractive>
+                <Text style={st.heroInfoText}>Details</Text>
+              </GlassView>
             </Pressable>
           </View>
         </View>
@@ -280,7 +283,7 @@ const st = StyleSheet.create({
     paddingTop: Layout.safeTop,
     paddingHorizontal: S.screen,
   },
-  logo: { width: 110, height: 28 },
+  logo: { width: 140, height: 36 },
   topIconBtn: {
     width: 40,
     height: 40,

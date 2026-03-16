@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { GlassView } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Search } from 'lucide-react-native';
@@ -96,7 +97,7 @@ export default function SearchTab() {
       {/* Header */}
       <View style={st.header}>
         <Text style={st.title}>Search</Text>
-        <View style={st.inputWrap}>
+        <GlassView style={st.inputWrap} glassEffectStyle="regular">
           <Search size={18} color={C.text3} strokeWidth={2} />
           <TextInput
             style={st.input}
@@ -107,7 +108,7 @@ export default function SearchTab() {
             clearButtonMode="while-editing"
             returnKeyType="search"
           />
-        </View>
+        </GlassView>
       </View>
 
       {results.length > 0 ? (
@@ -149,12 +150,14 @@ export default function SearchTab() {
                   Haptics.selectionAsync();
                   router.push(`/genre/${g.id}` as any);
                 }}
-                style={({ pressed }) => [
-                  st.genrePill,
-                  pressed && { opacity: 0.7 },
-                ]}
               >
-                <Text style={st.genrePillText}>{g.name}</Text>
+                <GlassView
+                  style={st.genrePill}
+                  glassEffectStyle="regular"
+                  isInteractive
+                >
+                  <Text style={st.genrePillText}>{g.name}</Text>
+                </GlassView>
               </Pressable>
             ))}
           </View>
