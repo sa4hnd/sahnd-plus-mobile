@@ -31,7 +31,6 @@ const config = {
       },
       package: "com.sahnd.plus",
       permissions: [],
-      usesCleartextTraffic: true,
       ...(IS_TV ? { banner: "./assets/tv-banner.png" } : {})
     },
     web: {
@@ -48,7 +47,7 @@ const config = {
       "expo-router",
       "expo-video",
       "react-native-video",
-      "./plugins/withCleartextTraffic",
+      ["expo-build-properties", { android: { usesCleartextTraffic: true } }],
       ...(IS_TV ? [["@react-native-tvos/config-tv", { isTV: true }]] : [])
     ],
     experiments: {
