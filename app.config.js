@@ -37,6 +37,12 @@ const config = {
       bundler: "metro",
       output: "static"
     },
+    updates: {
+      url: "https://u.expo.dev/4c27db84-3dfc-4f7e-ace3-3bb95239718d"
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    },
     plugins: [
       "expo-router",
       "expo-video",
