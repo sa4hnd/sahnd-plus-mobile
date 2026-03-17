@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Pressable, FlatList, StyleSheet,
-  ActivityIndicator, Animated, useWindowDimensions, TextInput,
+  ActivityIndicator, Animated, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,35 +13,10 @@ import { fetchChannels } from '@/lib/channels';
 import { toggleFavoriteChannel, isFavoriteChannel } from '@/lib/channelFavorites';
 import { C, S, isTV } from '@/lib/design';
 import { useTVRemote } from '@/lib/tv';
+import ChannelNumberInput from '@/components/ChannelNumberInput';
 import { Channel } from '@/types';
 
 const STRIP_LOGO = isTV ? 64 : 44;
-
-// Hook for number input via hardware keyboard/remote
-function useNumberInput(onNumber: (num: number) => void) {
-  const [digits, setDigits] = useState('');
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!digits) return;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      const num = parseInt(digits, 10);
-      if (num > 0) onNumber(num);
-      setDigits('');
-    }, 1500);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [digits, onNumber]);
-
-  const handleKey = useCallback((e: any) => {
-    const key = e?.nativeEvent?.key || '';
-    if (/^[0-9]$/.test(key)) {
-      setDigits(prev => prev + key);
-    }
-  }, []);
-
-  return { digits, handleKey };
-}
 
 export default function ChannelPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -58,7 +33,6 @@ export default function ChannelPlayerScreen() {
 
   const controlsOpacity = useRef(new Animated.Value(isTV ? 1 : 0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const keyInputRef = useRef<any>(null);
 
   const player = useVideoPlayer(
     channel ? { uri: channel.stream_url } : null,
@@ -147,16 +121,6 @@ export default function ChannelPlayerScreen() {
 
   const currentIndex = channel ? allChannels.findIndex(ch => ch.id === channel.id) : -1;
 
-  // Number input: type digits on remote to jump to channel
-  const handleNumberInput = useCallback((num: number) => {
-    const idx = num - 1; // Channel 1 = index 0
-    if (idx >= 0 && idx < allChannels.length) {
-      switchChannel(allChannels[idx]);
-    }
-  }, [allChannels, switchChannel]);
-
-  const { digits: typedDigits, handleKey } = useNumberInput(handleNumberInput);
-
   if (loading) {
     return (
       <View style={st.center}>
@@ -177,37 +141,10 @@ export default function ChannelPlayerScreen() {
 
   return (
     <View style={st.container}>
-      {/* Hidden TextInput to capture number key presses */}
-      <TextInput
-        ref={keyInputRef}
-        autoFocus
-        style={st.hiddenInput}
-        keyboardType="number-pad"
-        caretHidden
-        onKeyPress={handleKey}
-        onChangeText={(text) => {
-          // Also handle onChangeText for devices that don't fire onKeyPress
-          const last = text.slice(-1);
-          if (/^[0-9]$/.test(last)) handleKey({ nativeEvent: { key: last } });
-        }}
-        value=""
-        blurOnSubmit={false}
-      />
+      <ChannelNumberInput allChannels={allChannels} navigate={false} onSwitch={switchChannel} />
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
 
       <Pressable style={st.playerArea} onPress={toggleControls}>
-        {/* Number input OSD */}
-        {typedDigits ? (
-          <View style={st.numberOSD}>
-            <Text style={st.numberOSDText}>{typedDigits}</Text>
-            <Text style={st.numberOSDSub}>
-              {(() => {
-                const idx = parseInt(typedDigits, 10) - 1;
-                return idx >= 0 && idx < allChannels.length ? allChannels[idx].name : '';
-              })()}
-            </Text>
-          </View>
-        ) : null}
         {/* Video — properly sized for portrait and landscape */}
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {(() => {
@@ -344,35 +281,4 @@ const st = StyleSheet.create({
   stripLogo: { width: '100%', height: '100%' },
   stripFallback: { justifyContent: 'center', alignItems: 'center' },
   stripInitial: { color: '#fff', fontSize: isTV ? 16 : 12, fontWeight: '700' },
-
-  numberOSD: {
-    position: 'absolute',
-    top: isTV ? 40 : 60,
-    right: isTV ? 40 : 16,
-    zIndex: 50,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    minWidth: isTV ? 120 : 80,
-  },
-  numberOSDText: {
-    color: '#fff',
-    fontSize: isTV ? 48 : 32,
-    fontWeight: '800',
-  },
-  numberOSDSub: {
-    color: C.text2,
-    fontSize: isTV ? 16 : 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  hiddenInput: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    opacity: 0,
-    top: -100,
-  },
 });

@@ -18,6 +18,7 @@ import { fetchChannels } from '@/lib/channels';
 import { C, S, R, Layout, T, isTV } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
 import ChannelGrid from '@/components/ChannelGrid';
+import ChannelNumberInput from '@/components/ChannelNumberInput';
 import { Movie, WatchHistoryItem, ChannelCategory } from '@/types';
 
 const CW_THUMB_W = Layout.thumbW;
@@ -290,7 +291,10 @@ export default function HomeScreen() {
       {/* ── Content by category ── */}
       <View style={st.content}>
         {activeCategory === 'channels' && (
-          <ChannelGrid categories={channels} />
+          <>
+            <ChannelNumberInput allChannels={channels.flatMap(c => c.channels)} />
+            <ChannelGrid categories={channels} />
+          </>
         )}
 
         {activeCategory === 'movies' && (
