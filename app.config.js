@@ -31,6 +31,7 @@ const config = {
       },
       package: "com.sahnd.plus",
       permissions: [],
+      usesCleartextTraffic: true,
       ...(IS_TV ? { banner: "./assets/tv-banner.png" } : {})
     },
     web: {
