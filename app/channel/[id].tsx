@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Pressable, FlatList, StyleSheet,
-  ActivityIndicator, Animated, useWindowDimensions, Platform,
+  ActivityIndicator, Animated, useWindowDimensions, TextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,22 +33,14 @@ function useNumberInput(onNumber: (num: number) => void) {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [digits, onNumber]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'android' && Platform.OS !== 'web') return;
-    // Listen for hardware key events (number keys on remote/keyboard)
-    const { DeviceEventEmitter } = require('react-native');
-    const sub = DeviceEventEmitter?.addListener?.('onKeyDown', (evt: any) => {
-      const key = evt?.keyCode;
-      // Android KeyEvent: KEYCODE_0=7, KEYCODE_9=16, KEYCODE_NUMPAD_0=144, KEYCODE_NUMPAD_9=153
-      let digit = -1;
-      if (key >= 7 && key <= 16) digit = key - 7;
-      else if (key >= 144 && key <= 153) digit = key - 144;
-      if (digit >= 0) setDigits(prev => prev + digit.toString());
-    });
-    return () => sub?.remove?.();
+  const handleKey = useCallback((e: any) => {
+    const key = e?.nativeEvent?.key || '';
+    if (/^[0-9]$/.test(key)) {
+      setDigits(prev => prev + key);
+    }
   }, []);
 
-  return digits;
+  return { digits, handleKey };
 }
 
 export default function ChannelPlayerScreen() {
@@ -66,6 +58,7 @@ export default function ChannelPlayerScreen() {
 
   const controlsOpacity = useRef(new Animated.Value(isTV ? 1 : 0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keyInputRef = useRef<any>(null);
 
   const player = useVideoPlayer(
     channel ? { uri: channel.stream_url } : null,
@@ -162,7 +155,7 @@ export default function ChannelPlayerScreen() {
     }
   }, [allChannels, switchChannel]);
 
-  const typedDigits = useNumberInput(handleNumberInput);
+  const { digits: typedDigits, handleKey } = useNumberInput(handleNumberInput);
 
   if (loading) {
     return (
@@ -184,6 +177,22 @@ export default function ChannelPlayerScreen() {
 
   return (
     <View style={st.container}>
+      {/* Hidden TextInput to capture number key presses */}
+      <TextInput
+        ref={keyInputRef}
+        autoFocus
+        style={st.hiddenInput}
+        keyboardType="number-pad"
+        caretHidden
+        onKeyPress={handleKey}
+        onChangeText={(text) => {
+          // Also handle onChangeText for devices that don't fire onKeyPress
+          const last = text.slice(-1);
+          if (/^[0-9]$/.test(last)) handleKey({ nativeEvent: { key: last } });
+        }}
+        value=""
+        blurOnSubmit={false}
+      />
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
 
       <Pressable style={st.playerArea} onPress={toggleControls}>
@@ -358,5 +367,12 @@ const st = StyleSheet.create({
     fontSize: isTV ? 16 : 12,
     fontWeight: '600',
     marginTop: 4,
+  },
+  hiddenInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0,
+    top: -100,
   },
 });
