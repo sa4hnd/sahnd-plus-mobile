@@ -58,9 +58,9 @@ function ChannelCard({ channel, isFirst, cardSize, number }: { channel: Channel;
 
 export default function ChannelGrid({ categories }: Props) {
   const { width } = useWindowDimensions();
-  // Dynamic columns: aim for ~100-120px cards on TV, ~100px on mobile
-  const targetCardSize = isTV ? 110 : 100;
-  const cols = Math.max(isTV ? 6 : 3, Math.floor((width - S.screen * 2) / (targetCardSize + GAP)));
+  // Aim for ~100px cards, min 3 cols mobile / 6 TV
+  const targetSize = isTV ? 110 : 100;
+  const cols = Math.max(3, Math.floor((width - S.screen * 2) / (targetSize + GAP)));
   const cardSize = (width - S.screen * 2 - GAP * (cols - 1)) / cols;
 
   // Build global channel numbering
