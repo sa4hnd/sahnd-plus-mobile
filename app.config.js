@@ -39,7 +39,7 @@ const config = {
       output: "static"
     },
     updates: {
-      url: "https://u.expo.dev/f0abb43a-2ec8-471d-8bbb-a2b0253a825d"
+      url: "https://u.expo.dev/e6d4c668-2809-493d-a86c-e156a7a200bc"
     },
     runtimeVersion: {
       policy: "appVersion"
@@ -56,10 +56,10 @@ const config = {
     extra: {
       router: {},
       eas: {
-        projectId: "f0abb43a-2ec8-471d-8bbb-a2b0253a825d"
+        projectId: "e6d4c668-2809-493d-a86c-e156a7a200bc"
       }
     },
-    owner: "sahindhamzani"
+    owner: "sahndmint"
   }
 };
 
