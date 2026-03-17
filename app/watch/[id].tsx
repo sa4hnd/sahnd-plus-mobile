@@ -78,13 +78,18 @@ export default function WatchScreen() {
           setSavedPosition(Math.floor((savedPct / 100) * runtimeSec));
         }
 
-        const stream = await fetchStream(mediaType, tmdbId, season, episode);
-        console.log('[Watch] Got native stream:', stream.m3u8.slice(0, 60));
-        setStreamUrl(stream.m3u8);
+        try {
+          const stream = await fetchStream(mediaType, tmdbId, season, episode);
+          console.log('[Watch] Got native stream:', stream.m3u8.slice(0, 60));
+          setStreamUrl(stream.m3u8);
+        } catch (e: any) {
+          console.log('[Watch] No native stream, using embed player');
+          setUseWebView(true);
+        }
         setLoading(false);
       } catch (e: any) {
-        console.error('[Watch] Stream error:', e.message);
-        setStreamError(e.message || 'Failed to load stream');
+        console.error('[Watch] Load error:', e.message);
+        setUseWebView(true);
         setLoading(false);
       }
     };
