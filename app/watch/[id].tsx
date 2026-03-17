@@ -29,6 +29,7 @@ export default function WatchScreen() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [watchedEps, setWatchedEps] = useState<Set<number>>(new Set());
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamHeaders, setStreamHeaders] = useState<Record<string, string>>({});
   const [useWebView, setUseWebView] = useState(false);
   const [streamError, setStreamError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -82,6 +83,7 @@ export default function WatchScreen() {
           const stream = await fetchStream(mediaType, tmdbId, season, episode);
           console.log('[Watch] Got native stream:', stream.m3u8.slice(0, 60));
           setStreamUrl(stream.m3u8);
+          setStreamHeaders(stream.headers || {});
         } catch (e: any) {
           console.log('[Watch] No native stream, using embed player');
           setUseWebView(true);
@@ -168,6 +170,7 @@ export default function WatchScreen() {
           title={title}
           subtitle={season && episode ? `S${season} · E${episode}${currentEp ? ` · ${currentEp.name}` : ''}` : undefined}
           startAt={savedPosition}
+          headers={streamHeaders}
           onProgress={handlePlayerProgress}
           onComplete={handlePlayerComplete}
           onBack={() => router.back()}
@@ -201,7 +204,7 @@ export default function WatchScreen() {
                 onPress={() => {
                   setLoading(true); setStreamError('');
                   fetchStream(mediaType, tmdbId, season, episode)
-                    .then(r => { setStreamUrl(r.m3u8); setLoading(false); })
+                    .then(r => { setStreamUrl(r.m3u8); setStreamHeaders(r.headers || {}); setLoading(false); })
                     .catch(e => { setStreamError(e.message); setLoading(false); });
                 }}
                 style={[st.fallbackBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
@@ -345,7 +348,7 @@ export default function WatchScreen() {
               {detail.similar.results.slice(0, 12).map((m: any) => (
                 <Pressable
                   key={m.id}
-                  onPress={() => router.push(`/${mediaType}/${m.id}` as any)}
+                  onPress={() => router.replace(`/${mediaType}/${m.id}` as any)}
                   style={({ pressed }) => [st.similarCard, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
                 >
                   <Image source={{ uri: img(m.poster_path, 'w185')! }} style={st.similarPoster} contentFit="cover" />

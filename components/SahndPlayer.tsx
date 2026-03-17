@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Platform, StyleSheet } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEventListener } from 'expo';
 
@@ -8,30 +8,45 @@ interface Props {
   title?: string;
   subtitle?: string;
   startAt?: number;
+  headers?: Record<string, string>;
   onProgress?: (sec: number, dur: number) => void;
   onComplete?: () => void;
   onBack?: () => void;
 }
 
 export default function SahndPlayer({
-  uri, title, subtitle, startAt = 0,
+  uri, title, subtitle, startAt = 0, headers,
   onProgress, onComplete, onBack,
 }: Props) {
   const seekedRef = useRef(false);
+  const playAttempted = useRef(false);
 
-  const player = useVideoPlayer(
-    { uri, headers: { Referer: 'https://vixsrc.to/' } },
-    (p) => {
-      p.timeUpdateEventInterval = 1;
-      p.play();
-    }
+  // On Android with proxied URLs, don't send any headers
+  const sourceHeaders = Platform.OS === 'android' ? undefined : (
+    headers && Object.keys(headers).length > 0 ? headers : { Referer: 'https://vixsrc.to/' }
   );
 
-  // Seek to saved position once ready
+  const source = sourceHeaders
+    ? { uri, headers: sourceHeaders }
+    : { uri };
+
+  const player = useVideoPlayer(source, (p) => {
+    p.timeUpdateEventInterval = 1;
+    p.play();
+  });
+
+  // Seek to saved position once ready, and ensure playback on Android
   useEventListener(player, 'statusChange', ({ status }) => {
-    if (status === 'readyToPlay' && startAt > 5 && !seekedRef.current) {
-      seekedRef.current = true;
-      player.currentTime = startAt;
+    if (status === 'readyToPlay') {
+      if (startAt > 5 && !seekedRef.current) {
+        seekedRef.current = true;
+        player.currentTime = startAt;
+      }
+      // Android sometimes doesn't auto-play — force it
+      if (!playAttempted.current) {
+        playAttempted.current = true;
+        player.play();
+      }
     }
   });
 

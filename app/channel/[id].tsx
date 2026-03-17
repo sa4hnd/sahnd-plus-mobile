@@ -9,7 +9,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, Play, Pause, Heart } from 'lucide-react-native';
-import { fetchChannels } from '@/lib/channels';
+import { fetchChannels, getStreamUrl } from '@/lib/channels';
 import { toggleFavoriteChannel, isFavoriteChannel } from '@/lib/channelFavorites';
 import { C, S, isTV } from '@/lib/design';
 import { useTVRemote } from '@/lib/tv';
@@ -33,28 +33,35 @@ export default function ChannelPlayerScreen() {
   const controlsOpacity = useRef(new Animated.Value(isTV ? 1 : 0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+
   const player = useVideoPlayer(
-    channel ? { uri: channel.stream_url } : null,
+    resolvedUrl ? { uri: resolvedUrl } : null,
     (p) => { p.play(); }
   );
 
-  const switchChannel = useCallback((ch: Channel) => {
+  const switchChannel = useCallback(async (ch: Channel) => {
     if (!isTV) Haptics.selectionAsync();
     setChannel(ch);
     setPaused(false);
     if (!isTV) hideControlsNow();
-    player.replace({ uri: ch.stream_url });
+    const url = await getStreamUrl(ch.stream_url);
+    player.replace({ uri: url });
     player.play();
     isFavoriteChannel(ch.id).then(setIsFav);
   }, [player]);
 
   useEffect(() => {
-    fetchChannels().then((cats) => {
+    fetchChannels().then(async (cats) => {
       const flat = cats.flatMap(c => c.channels);
       setAllChannels(flat);
       const found = flat.find(ch => ch.id === id) || null;
       setChannel(found);
-      if (found) isFavoriteChannel(found.id).then(setIsFav);
+      if (found) {
+        const url = await getStreamUrl(found.stream_url);
+        setResolvedUrl(url);
+        isFavoriteChannel(found.id).then(setIsFav);
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [id]);
