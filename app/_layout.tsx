@@ -1,8 +1,24 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
+import * as Updates from 'expo-updates';
 
 export default function RootLayout() {
+  useEffect(() => {
+    async function checkOTA() {
+      if (__DEV__) return; // Skip in dev mode
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {}
+    }
+    checkOTA();
+  }, []);
+
   return (
     <ThemeProvider value={DarkTheme}>
       <StatusBar style="light" />
