@@ -15,7 +15,7 @@ import {
 } from '@/lib/tmdb';
 import { getContinueWatching, getLastWatched } from '@/lib/storage';
 import { fetchChannels } from '@/lib/channels';
-import { C, S, R, Layout, T } from '@/lib/design';
+import { C, S, R, Layout, T, isTV } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
 import ChannelGrid from '@/components/ChannelGrid';
 import { Movie, WatchHistoryItem, ChannelCategory } from '@/types';
@@ -33,7 +33,7 @@ const CATEGORIES: { key: ActiveCategory; label: string }[] = [
 export default function HomeScreen() {
   const router = useRouter();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
-  const HERO_H = SCREEN_H * 0.55;
+  const HERO_H = isTV ? SCREEN_H * 0.45 : SCREEN_H * 0.55;
   const [activeCategory, setActiveCategory] = useState<ActiveCategory>('channels');
   const [data, setData] = useState<Record<string, Movie[]>>({});
   const [channels, setChannels] = useState<ChannelCategory[]>([]);
@@ -113,11 +113,13 @@ export default function HomeScreen() {
       style={st.root}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => { setRefreshing(true); load(); }}
-          tintColor={C.accent}
-        />
+        !isTV ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); load(); }}
+            tintColor={C.accent}
+          />
+        ) : undefined
       }
     >
       {/* ── Hero Banner — all categories ── */}
@@ -146,27 +148,29 @@ export default function HomeScreen() {
         <View style={st.topBar}>
           <Image
             source={require('@/assets/logo.png')}
-            style={st.logo}
+            style={isTV ? st.logoTV : st.logo}
             contentFit="contain"
           />
-          <View style={st.topIcons}>
-            <Pressable
-              onPress={() => { Haptics.selectionAsync(); router.push('/watchlist' as any); }}
-              hitSlop={8}
-            >
-              <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
-                <Bookmark size={20} color={C.text} strokeWidth={2} />
-              </GlassView>
-            </Pressable>
-            <Pressable
-              onPress={() => { Haptics.selectionAsync(); router.push('/search' as any); }}
-              hitSlop={8}
-            >
-              <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
-                <Search size={20} color={C.text} strokeWidth={2} />
-              </GlassView>
-            </Pressable>
-          </View>
+          {!isTV && (
+            <View style={st.topIcons}>
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); router.push('/watchlist' as any); }}
+                hitSlop={8}
+              >
+                <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
+                  <Bookmark size={20} color={C.text} strokeWidth={2} />
+                </GlassView>
+              </Pressable>
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); router.push('/search' as any); }}
+                hitSlop={8}
+              >
+                <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
+                  <Search size={20} color={C.text} strokeWidth={2} />
+                </GlassView>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* Hero content */}
@@ -181,15 +185,16 @@ export default function HomeScreen() {
                 {channels[0]?.channels[0] && (
                   <Pressable
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       router.push(`/channel/${channels[0].channels[0].id}` as any);
                     }}
                     style={({ pressed }) => [
                       st.heroPlayBtn,
                       pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
                     ]}
+                    {...(isTV ? { hasTVPreferredFocus: true } : {})}
                   >
-                    <Play size={18} color="#000" fill="#000" strokeWidth={0} />
+                    <Play size={isTV ? 24 : 18} color="#000" fill="#000" strokeWidth={0} />
                     <Text style={st.heroPlayText}>Watch Now</Text>
                   </Pressable>
                 )}
@@ -223,31 +228,34 @@ export default function HomeScreen() {
               <View style={st.heroButtons}>
                 <Pressable
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     router.push(heroWatchUrl as any);
                   }}
                   style={({ pressed }) => [
                     st.heroPlayBtn,
                     pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
                   ]}
+                  {...(isTV ? { hasTVPreferredFocus: true } : {})}
                 >
-                  <Play size={18} color="#000" fill="#000" strokeWidth={0} />
+                  <Play size={isTV ? 24 : 18} color="#000" fill="#000" strokeWidth={0} />
                   <Text style={st.heroPlayText}>
                     {heroIsResume ? 'Resume' : 'Play'}
                   </Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push(`/${heroType}/${heroItem?.id}` as any);
-                  }}
-                  style={({ pressed }) => [pressed && { opacity: 0.8 }]}
-                >
-                  <GlassView style={st.heroListBtn} glassEffectStyle="regular" isInteractive>
-                    <Plus size={18} color={C.text} strokeWidth={2} />
-                    <Text style={st.heroListText}>My List</Text>
-                  </GlassView>
-                </Pressable>
+                {!isTV && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      router.push(`/${heroType}/${heroItem?.id}` as any);
+                    }}
+                    style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+                  >
+                    <GlassView style={st.heroListBtn} glassEffectStyle="regular" isInteractive>
+                      <Plus size={18} color={C.text} strokeWidth={2} />
+                      <Text style={st.heroListText}>My List</Text>
+                    </GlassView>
+                  </Pressable>
+                )}
               </View>
             </>
           )}
@@ -262,7 +270,7 @@ export default function HomeScreen() {
             <Pressable
               key={key}
               onPress={() => {
-                Haptics.selectionAsync();
+                if (!isTV) Haptics.selectionAsync();
                 setActiveCategory(key);
               }}
               style={({ pressed }) => [
@@ -299,12 +307,12 @@ export default function HomeScreen() {
                     <Pressable
                       key={`cw-${item.type}-${item.id}`}
                       onPress={() => {
-                        Haptics.selectionAsync();
+                        if (!isTV) Haptics.selectionAsync();
                         router.push(`/watch/${item.id}?type=${item.type}` as any);
                       }}
                       style={({ pressed }) => [
                         st.cwCard,
-                        pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                        pressed && !isTV && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                       ]}
                     >
                       <Image
@@ -343,7 +351,7 @@ export default function HomeScreen() {
                     <Pressable
                       key={`cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
                       onPress={() => {
-                        Haptics.selectionAsync();
+                        if (!isTV) Haptics.selectionAsync();
                         const url = item.season && item.episode
                           ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}`
                           : `/watch/${item.id}?type=tv`;
@@ -351,7 +359,7 @@ export default function HomeScreen() {
                       }}
                       style={({ pressed }) => [
                         st.cwCard,
-                        pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                        pressed && !isTV && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                       ]}
                     >
                       <Image
@@ -415,6 +423,7 @@ const st = StyleSheet.create({
     paddingHorizontal: S.screen,
   },
   logo: { width: 120, height: 32 },
+  logoTV: { width: 180, height: 48 },
   topIcons: { flexDirection: 'row', gap: 10 },
   topIconBtn: {
     width: 40,
@@ -432,25 +441,25 @@ const st = StyleSheet.create({
   heroBadge: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(229,9,20,0.35)',
-    paddingHorizontal: 10,
+    paddingHorizontal: isTV ? 16 : 10,
     paddingVertical: S.xs,
     borderRadius: R.sm,
-    marginBottom: 10,
+    marginBottom: isTV ? 16 : 10,
   },
   heroBadgeText: { color: C.accent, ...T.small },
   heroTitle: {
     ...T.heroTitle,
-    lineHeight: 36,
+    lineHeight: isTV ? 56 : 36,
     marginBottom: S.sm,
   },
   heroOverview: {
     ...T.caption,
     color: C.text2,
-    lineHeight: 19,
+    lineHeight: isTV ? 28 : 19,
     marginBottom: 14,
   },
   heroProgress: {
-    height: 3,
+    height: isTV ? 5 : 3,
     backgroundColor: C.separator,
     borderRadius: 2,
     marginBottom: 14,
@@ -461,14 +470,14 @@ const st = StyleSheet.create({
     backgroundColor: C.accent,
     borderRadius: 2,
   },
-  heroButtons: { flexDirection: 'row', gap: 10 },
+  heroButtons: { flexDirection: 'row', gap: isTV ? 20 : 10 },
   heroPlayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: S.sm,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 28,
-    paddingVertical: 13,
+    paddingHorizontal: isTV ? 40 : 28,
+    paddingVertical: isTV ? 18 : 13,
     borderRadius: R.pill,
   },
   heroPlayText: { ...T.button, color: '#000000' },
@@ -487,13 +496,13 @@ const st = StyleSheet.create({
   categoryRow: {
     flexDirection: 'row',
     paddingHorizontal: S.screen,
-    gap: S.sm,
+    gap: isTV ? S.md : S.sm,
     marginBottom: S.md,
     marginTop: S.sm,
   },
   categoryPill: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingHorizontal: isTV ? 28 : 18,
+    paddingVertical: isTV ? 14 : 8,
     borderRadius: R.pill,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
@@ -505,7 +514,7 @@ const st = StyleSheet.create({
   },
   categoryText: {
     ...T.button,
-    fontSize: 13,
+    fontSize: isTV ? 20 : 13,
     color: C.text2,
   },
   categoryTextActive: {
@@ -539,7 +548,7 @@ const st = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 3,
+    height: isTV ? 5 : 3,
     backgroundColor: C.separator,
   },
   cwProgressFill: { height: '100%', backgroundColor: C.accent },

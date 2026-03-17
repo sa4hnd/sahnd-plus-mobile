@@ -11,10 +11,11 @@ import * as Haptics from 'expo-haptics';
 import { ChevronLeft, Play, Pause, Heart } from 'lucide-react-native';
 import { fetchChannels } from '@/lib/channels';
 import { toggleFavoriteChannel, isFavoriteChannel } from '@/lib/channelFavorites';
-import { C, S } from '@/lib/design';
+import { C, S, isTV } from '@/lib/design';
+import { useTVRemote } from '@/lib/tv';
 import { Channel } from '@/types';
 
-const STRIP_LOGO = 44;
+const STRIP_LOGO = isTV ? 64 : 44;
 
 export default function ChannelPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,11 +26,11 @@ export default function ChannelPlayerScreen() {
   const [allChannels, setAllChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
-  const [showControls, setShowControls] = useState(false);
+  const [showControls, setShowControls] = useState(isTV); // Always show on TV
   const [isFav, setIsFav] = useState(false);
   const { width: screenW, height: screenH } = useWindowDimensions();
 
-  const controlsOpacity = useRef(new Animated.Value(0)).current;
+  const controlsOpacity = useRef(new Animated.Value(isTV ? 1 : 0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const player = useVideoPlayer(
@@ -38,10 +39,10 @@ export default function ChannelPlayerScreen() {
   );
 
   const switchChannel = useCallback((ch: Channel) => {
-    Haptics.selectionAsync();
+    if (!isTV) Haptics.selectionAsync();
     setChannel(ch);
     setPaused(false);
-    hideControlsNow();
+    if (!isTV) hideControlsNow();
     player.replace({ uri: ch.stream_url });
     player.play();
     isFavoriteChannel(ch.id).then(setIsFav);
@@ -58,13 +59,38 @@ export default function ChannelPlayerScreen() {
     }).catch(() => setLoading(false));
   }, [id]);
 
+  // TV Remote controls
+  useTVRemote({
+    onSelect: () => {
+      if (paused) { player.play(); } else { player.pause(); }
+      setPaused(!paused);
+    },
+    onPlayPause: () => {
+      if (paused) { player.play(); } else { player.pause(); }
+      setPaused(!paused);
+    },
+    onLeft: () => {
+      const idx = channel ? allChannels.findIndex(ch => ch.id === channel.id) : -1;
+      if (idx > 0) switchChannel(allChannels[idx - 1]);
+    },
+    onRight: () => {
+      const idx = channel ? allChannels.findIndex(ch => ch.id === channel.id) : -1;
+      if (idx >= 0 && idx < allChannels.length - 1) switchChannel(allChannels[idx + 1]);
+    },
+    onBack: () => {
+      router.back();
+    },
+  });
+
   const hideControlsNow = () => {
+    if (isTV) return; // Never hide on TV
     if (hideTimer.current) clearTimeout(hideTimer.current);
     Animated.timing(controlsOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     setShowControls(false);
   };
 
   const toggleControls = () => {
+    if (isTV) return; // Always visible on TV
     if (hideTimer.current) clearTimeout(hideTimer.current);
     if (showControls) {
       hideControlsNow();
@@ -78,17 +104,18 @@ export default function ChannelPlayerScreen() {
   const togglePause = () => {
     if (paused) { player.play(); } else { player.pause(); }
     setPaused(!paused);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Reset auto-hide timer
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(hideControlsNow, 5000);
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!isTV) {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(hideControlsNow, 5000);
+    }
   };
 
   const toggleFav = async () => {
     if (!channel) return;
     const nowFav = await toggleFavoriteChannel(channel.id);
     setIsFav(nowFav);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!isTV) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const currentIndex = channel ? allChannels.findIndex(ch => ch.id === channel.id) : -1;
@@ -136,40 +163,50 @@ export default function ChannelPlayerScreen() {
         {/* Controls overlay */}
         <Animated.View style={[st.overlay, { opacity: controlsOpacity }]} pointerEvents={showControls ? 'auto' : 'none'}>
           {/* Top */}
-          <View style={[st.overlayTop, { paddingTop: insets.top + 4 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={st.iconBtn}>
-              <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
-            </Pressable>
+          <View style={[st.overlayTop, { paddingTop: isTV ? 24 : insets.top + 4 }]}>
+            {!isTV && (
+              <Pressable onPress={() => router.back()} hitSlop={12} style={st.iconBtn}>
+                <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
+              </Pressable>
+            )}
             <Text style={st.channelName} numberOfLines={1}>{channel.name}</Text>
-            <Pressable onPress={toggleFav} hitSlop={12} style={st.iconBtn}>
-              <Heart
-                size={20}
-                color={isFav ? C.accent : '#fff'}
-                fill={isFav ? C.accent : 'transparent'}
-                strokeWidth={2}
-              />
-            </Pressable>
+            {!isTV && (
+              <Pressable onPress={toggleFav} hitSlop={12} style={st.iconBtn}>
+                <Heart
+                  size={20}
+                  color={isFav ? C.accent : '#fff'}
+                  fill={isFav ? C.accent : 'transparent'}
+                  strokeWidth={2}
+                />
+              </Pressable>
+            )}
           </View>
 
-          {/* Center play/pause */}
-          <Pressable onPress={togglePause} style={st.centerBtn}>
-            {paused ? (
-              <Play size={36} color="#fff" fill="#fff" />
-            ) : (
-              <Pause size={36} color="#fff" fill="#fff" />
-            )}
-          </Pressable>
+          {/* Center play/pause — only on mobile or when paused on TV */}
+          {(!isTV || paused) && (
+            <Pressable onPress={togglePause} style={st.centerBtn}>
+              {paused ? (
+                <Play size={isTV ? 48 : 36} color="#fff" fill="#fff" />
+              ) : (
+                <Pause size={isTV ? 48 : 36} color="#fff" fill="#fff" />
+              )}
+            </Pressable>
+          )}
 
-          {/* Bottom: masked strip with channel logos */}
-          <View style={[st.overlayBottom, { paddingBottom: insets.bottom || 12 }]}>
+          {/* Bottom: channel strip — always visible on TV */}
+          <View style={[st.overlayBottom, { paddingBottom: isTV ? 24 : insets.bottom || 12 }]}>
             <FlatList
               data={allChannels}
               horizontal
               showsHorizontalScrollIndicator={false}
               keyExtractor={(ch) => ch.id}
-              contentContainerStyle={{ paddingHorizontal: S.screen, gap: 10 }}
+              contentContainerStyle={{ paddingHorizontal: S.screen, gap: isTV ? 16 : 10 }}
               initialScrollIndex={Math.max(0, currentIndex)}
-              getItemLayout={(_, index) => ({ length: STRIP_LOGO + 10, offset: (STRIP_LOGO + 10) * index, index })}
+              getItemLayout={(_, index) => ({
+                length: STRIP_LOGO + (isTV ? 16 : 10),
+                offset: (STRIP_LOGO + (isTV ? 16 : 10)) * index,
+                index,
+              })}
               renderItem={({ item }) => {
                 const isActive = item.id === channel.id;
                 return (
@@ -207,8 +244,8 @@ const st = StyleSheet.create({
   overlayTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: isTV ? 48 : 8,
+    backgroundColor: isTV ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.5)',
     paddingBottom: 8,
   },
   iconBtn: {
@@ -217,23 +254,23 @@ const st = StyleSheet.create({
   },
   channelName: {
     flex: 1, textAlign: 'center',
-    color: '#fff', fontSize: 16, fontWeight: '600',
+    color: '#fff', fontSize: isTV ? 24 : 16, fontWeight: '600',
   },
   centerBtn: {
     alignSelf: 'center',
-    width: 72, height: 72, borderRadius: 36,
+    width: isTV ? 96 : 72, height: isTV ? 96 : 72, borderRadius: isTV ? 48 : 36,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center', alignItems: 'center',
   },
   overlayBottom: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: isTV ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.6)',
     paddingTop: 12,
     paddingBottom: 4,
   },
 
   stripItem: {
     width: STRIP_LOGO, height: STRIP_LOGO,
-    borderRadius: 10,
+    borderRadius: isTV ? 14 : 10,
     backgroundColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
     borderWidth: 2, borderColor: 'transparent',
@@ -241,5 +278,5 @@ const st = StyleSheet.create({
   stripItemActive: { borderColor: C.accent },
   stripLogo: { width: '100%', height: '100%' },
   stripFallback: { justifyContent: 'center', alignItems: 'center' },
-  stripInitial: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  stripInitial: { color: '#fff', fontSize: isTV ? 16 : 12, fontWeight: '700' },
 });

@@ -18,8 +18,38 @@
     "preview": {
       "distribution": "internal"
     },
+    "preview_android": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview_tv": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_TV": "1"
+      }
+    },
     "production": {
       "autoIncrement": true
+    },
+    "production_android": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "production_tv": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_TV": "1"
+      }
     }
   },
   "submit": {

@@ -10,7 +10,8 @@ import SahndPlayer from '@/components/SahndPlayer';
 import { fetchStream } from '@/lib/streamApi';
 import { addToHistory, markWatched, updateProgress, isWatched as checkWatched, getProgress } from '@/lib/storage';
 import { movieDetail, tvDetail, seasonDetail, img } from '@/lib/tmdb';
-import { C, S, R, T } from '@/lib/design';
+import { C, S, R, T, isTV } from '@/lib/design';
+import { useTVRemote } from '@/lib/tv';
 import { MovieDetail, Episode } from '@/types';
 
 const { width: W } = Dimensions.get('window');
@@ -103,9 +104,26 @@ export default function WatchScreen() {
   };
 
   const goToEp = (ep: Episode) => {
-    Haptics.selectionAsync();
+    if (!isTV) Haptics.selectionAsync();
     router.replace(`/watch/${tmdbId}?type=tv&s=${ep.season_number}&e=${ep.episode_number}` as any);
   };
+
+  // TV remote: play/pause with select, seek with left/right, back to exit
+  useTVRemote({
+    onSelect: () => {
+      // SahndPlayer handles its own play/pause, but we handle the WebView case
+      if (useWebView) return;
+    },
+    onPlayPause: () => {
+      // Handled by SahndPlayer natively
+    },
+    onFastForward: () => {
+      if (nextEp) goToEp(nextEp);
+    },
+    onBack: () => {
+      router.back();
+    },
+  });
 
   const getEmbedUrl = () => {
     let url = `https://vixsrc.to/${mediaType}/${tmdbId}`;

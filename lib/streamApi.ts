@@ -1,5 +1,5 @@
 // Stream API URL - update this when tunnel changes
-export const STREAM_API = 'https://dense-blond-actor-bundle.trycloudflare.com';
+export const STREAM_API = 'https://sahnd-plus-api.vercel.app';
 
 export async function fetchStream(type: 'movie' | 'tv', tmdbId: number, season?: number, episode?: number) {
   const apiType = type === 'tv' ? 'series' : 'movie';
