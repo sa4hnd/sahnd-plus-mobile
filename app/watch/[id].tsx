@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -17,6 +18,7 @@ const { width: W } = Dimensions.get('window');
 export default function WatchScreen() {
   const params = useLocalSearchParams<{ id: string; type: string; s?: string; e?: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const mediaType = (params.type as 'movie' | 'tv') || 'movie';
   const tmdbId = Number(params.id);
   const season = params.s ? Number(params.s) : undefined;
@@ -117,6 +119,9 @@ export default function WatchScreen() {
   return (
     <View style={st.container}>
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
+
+      {/* Safe area spacer — black bar above player */}
+      <View style={{ height: insets.top, backgroundColor: '#000' }} />
 
       {/* ── PLAYER ── */}
       {loading ? (

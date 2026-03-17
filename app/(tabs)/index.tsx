@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, RefreshControl, ActivityIndicator,
-  StyleSheet, Pressable, Dimensions,
+  StyleSheet, Pressable, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { GlassView } from 'expo-glass-effect';
@@ -11,21 +11,32 @@ import * as Haptics from 'expo-haptics';
 import { Search, Play, Plus, Bookmark } from 'lucide-react-native';
 import {
   trending, popularMovies, topRatedMovies,
-  nowPlayingMovies, popularTV, img,
+  nowPlayingMovies, popularTV, topRatedTV, airingTodayTV, onTheAirTV, img,
 } from '@/lib/tmdb';
 import { getContinueWatching, getLastWatched } from '@/lib/storage';
+import { fetchChannels } from '@/lib/channels';
 import { C, S, R, Layout, T } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
-import { Movie, WatchHistoryItem } from '@/types';
+import ChannelGrid from '@/components/ChannelGrid';
+import { Movie, WatchHistoryItem, ChannelCategory } from '@/types';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const HERO_H = SCREEN_H * 0.55;
 const CW_THUMB_W = Layout.thumbW;
 const CW_THUMB_H = Layout.thumbH;
 
+type ActiveCategory = 'channels' | 'movies' | 'series';
+const CATEGORIES: { key: ActiveCategory; label: string }[] = [
+  { key: 'channels', label: 'Channels' },
+  { key: 'movies', label: 'Movies' },
+  { key: 'series', label: 'Series' },
+];
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const HERO_H = SCREEN_H * 0.55;
+  const [activeCategory, setActiveCategory] = useState<ActiveCategory>('channels');
   const [data, setData] = useState<Record<string, Movie[]>>({});
+  const [channels, setChannels] = useState<ChannelCategory[]>([]);
   const [continueItems, setContinueItems] = useState<WatchHistoryItem[]>([]);
   const [lastWatched, setLastWatched] = useState<WatchHistoryItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,9 +44,11 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [t, pm, tr, np, pt] = await Promise.all([
+      const [t, pm, tr, np, pt, trt, atv, otv, ch] = await Promise.all([
         trending(), popularMovies(), topRatedMovies(),
-        nowPlayingMovies(), popularTV(),
+        nowPlayingMovies(), popularTV(), topRatedTV(),
+        airingTodayTV(), onTheAirTV(),
+        fetchChannels().catch(() => [] as ChannelCategory[]),
       ]);
       setData({
         trending: t.results,
@@ -43,7 +56,11 @@ export default function HomeScreen() {
         topRated: tr.results,
         nowPlaying: np.results,
         popularTv: pt.results,
+        topRatedTv: trt.results,
+        airingToday: atv.results,
+        onTheAir: otv.results,
       });
+      setChannels(ch);
     } catch (e) {
       console.error(e);
     }
@@ -103,16 +120,22 @@ export default function HomeScreen() {
         />
       }
     >
-      {/* ── Hero Banner ── */}
-      <View style={st.hero}>
-        {heroBg && (
+      {/* ── Hero Banner — all categories ── */}
+      <View style={[st.hero, { width: SCREEN_W, height: HERO_H }]}>
+        {activeCategory === 'channels' ? (
+          <Image
+            source={require('@/assets/channels-hero.jpg')}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        ) : heroBg ? (
           <Image
             source={{ uri: heroBg }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={300}
           />
-        )}
+        ) : null}
         <LinearGradient
           colors={['rgba(20,20,20,0.3)', 'transparent', 'rgba(20,20,20,0.7)', C.bg]}
           locations={[0, 0.3, 0.7, 1]}
@@ -148,118 +171,217 @@ export default function HomeScreen() {
 
         {/* Hero content */}
         <View style={st.heroContent}>
-          {lastWatched && (
-            <View style={st.heroBadge}>
-              <Text style={st.heroBadgeText}>
-                {heroIsResume ? 'Continue Watching' : 'Last Watched'}
-                {lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
-                  ? ` \u00b7 S${lastWatched.season} E${lastWatched.episode}`
-                  : ''}
+          {activeCategory === 'channels' ? (
+            <>
+              <Text style={st.heroTitle} numberOfLines={2}>Live TV</Text>
+              <Text style={st.heroOverview} numberOfLines={2}>
+                {channels.reduce((t, c) => t + c.channels.length, 0)} channels across {channels.length} categories
               </Text>
-            </View>
-          )}
-          <Text style={st.heroTitle} numberOfLines={2}>{heroTitle}</Text>
-          {heroItem && 'overview' in heroItem && (
-            <Text style={st.heroOverview} numberOfLines={2}>
-              {heroItem.overview}
-            </Text>
-          )}
+              <View style={st.heroButtons}>
+                {channels[0]?.channels[0] && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      router.push(`/channel/${channels[0].channels[0].id}` as any);
+                    }}
+                    style={({ pressed }) => [
+                      st.heroPlayBtn,
+                      pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
+                    ]}
+                  >
+                    <Play size={18} color="#000" fill="#000" strokeWidth={0} />
+                    <Text style={st.heroPlayText}>Watch Now</Text>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          ) : (
+            <>
+              {lastWatched && (
+                <View style={st.heroBadge}>
+                  <Text style={st.heroBadgeText}>
+                    {heroIsResume ? 'Continue Watching' : 'Last Watched'}
+                    {lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
+                      ? ` \u00b7 S${lastWatched.season} E${lastWatched.episode}`
+                      : ''}
+                  </Text>
+                </View>
+              )}
+              <Text style={st.heroTitle} numberOfLines={2}>{heroTitle}</Text>
+              {heroItem && 'overview' in heroItem && (
+                <Text style={st.heroOverview} numberOfLines={2}>
+                  {heroItem.overview}
+                </Text>
+              )}
 
-          {heroIsResume && lastWatched && (
-            <View style={st.heroProgress}>
-              <View style={[st.heroProgressFill, { width: `${lastWatched.progress}%` }]} />
-            </View>
-          )}
+              {heroIsResume && lastWatched && (
+                <View style={st.heroProgress}>
+                  <View style={[st.heroProgressFill, { width: `${lastWatched.progress}%` }]} />
+                </View>
+              )}
 
-          <View style={st.heroButtons}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push(heroWatchUrl as any);
-              }}
-              style={({ pressed }) => [
-                st.heroPlayBtn,
-                pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
-              ]}
-            >
-              <Play size={18} color="#000" fill="#000" strokeWidth={0} />
-              <Text style={st.heroPlayText}>
-                {heroIsResume ? 'Resume' : 'Play'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push(`/${heroType}/${heroItem?.id}` as any);
-              }}
-              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
-            >
-              <GlassView style={st.heroListBtn} glassEffectStyle="regular" isInteractive>
-                <Plus size={18} color={C.text} strokeWidth={2} />
-                <Text style={st.heroListText}>My List</Text>
-              </GlassView>
-            </Pressable>
-          </View>
+              <View style={st.heroButtons}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    router.push(heroWatchUrl as any);
+                  }}
+                  style={({ pressed }) => [
+                    st.heroPlayBtn,
+                    pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
+                  ]}
+                >
+                  <Play size={18} color="#000" fill="#000" strokeWidth={0} />
+                  <Text style={st.heroPlayText}>
+                    {heroIsResume ? 'Resume' : 'Play'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push(`/${heroType}/${heroItem?.id}` as any);
+                  }}
+                  style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+                >
+                  <GlassView style={st.heroListBtn} glassEffectStyle="regular" isInteractive>
+                    <Plus size={18} color={C.text} strokeWidth={2} />
+                    <Text style={st.heroListText}>My List</Text>
+                  </GlassView>
+                </Pressable>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
-      {/* ── Content Rows ── */}
-      <View style={st.content}>
-        {continueItems.length > 0 && (
-          <View style={st.section}>
-            <Text style={st.sectionTitle}>Continue Watching</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={st.cwRow}
+      {/* ── Category Switcher ── */}
+      <View style={st.categoryRow}>
+        {CATEGORIES.map(({ key, label }) => {
+          const active = key === activeCategory;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setActiveCategory(key);
+              }}
+              style={({ pressed }) => [
+                st.categoryPill,
+                active && st.categoryPillActive,
+                pressed && { opacity: 0.8 },
+              ]}
             >
-              {continueItems.map((item) => (
-                <Pressable
-                  key={`cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    const url =
-                      item.type === 'tv' && item.season && item.episode
-                        ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}`
-                        : `/watch/${item.id}?type=${item.type}`;
-                    router.push(url as any);
-                  }}
-                  style={({ pressed }) => [
-                    st.cwCard,
-                    pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
-                  ]}
-                >
-                  <Image
-                    source={{ uri: img(item.backdrop_path || item.poster_path, 'w342')! }}
-                    style={st.cwThumb}
-                    contentFit="cover"
-                  />
-                  <View style={st.cwProgressBg}>
-                    <View
-                      style={[
-                        st.cwProgressFill,
-                        { width: `${Math.max(item.progress, 5)}%` },
-                      ]}
-                    />
-                  </View>
-                  {item.type === 'tv' && item.season && item.episode && (
-                    <View style={st.cwBadge}>
-                      <Text style={st.cwBadgeText}>
-                        S{item.season} E{item.episode}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
+              <Text style={[st.categoryText, active && st.categoryTextActive]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* ── Content by category ── */}
+      <View style={st.content}>
+        {activeCategory === 'channels' && (
+          <ChannelGrid categories={channels} />
         )}
 
-        <ContentRow title="Trending Now" data={data.trending?.slice(1) || []} />
-        <ContentRow title="Popular Movies" data={data.popular || []} type="movie" />
-        <ContentRow title="Now Playing" data={data.nowPlaying || []} type="movie" />
-        <ContentRow title="Top Rated" data={data.topRated || []} type="movie" />
-        <ContentRow title="Popular Series" data={data.popularTv || []} type="tv" />
+        {activeCategory === 'movies' && (
+          <>
+            {continueItems.filter(i => i.type === 'movie').length > 0 && (
+              <View style={st.section}>
+                <Text style={st.sectionTitle}>Continue Watching</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={st.cwRow}
+                >
+                  {continueItems.filter(i => i.type === 'movie').map((item) => (
+                    <Pressable
+                      key={`cw-${item.type}-${item.id}`}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        router.push(`/watch/${item.id}?type=${item.type}` as any);
+                      }}
+                      style={({ pressed }) => [
+                        st.cwCard,
+                        pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                      ]}
+                    >
+                      <Image
+                        source={{ uri: img(item.backdrop_path || item.poster_path, 'w342')! }}
+                        style={st.cwThumb}
+                        contentFit="cover"
+                      />
+                      <View style={st.cwProgressBg}>
+                        <View
+                          style={[st.cwProgressFill, { width: `${Math.max(item.progress, 5)}%` }]}
+                        />
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+            <ContentRow title="Trending Now" data={data.trending?.slice(1) || []} />
+            <ContentRow title="Popular Movies" data={data.popular || []} type="movie" />
+            <ContentRow title="Now Playing" data={data.nowPlaying || []} type="movie" />
+            <ContentRow title="Top Rated" data={data.topRated || []} type="movie" />
+          </>
+        )}
+
+        {activeCategory === 'series' && (
+          <>
+            {continueItems.filter(i => i.type === 'tv').length > 0 && (
+              <View style={st.section}>
+                <Text style={st.sectionTitle}>Continue Watching</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={st.cwRow}
+                >
+                  {continueItems.filter(i => i.type === 'tv').map((item) => (
+                    <Pressable
+                      key={`cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        const url = item.season && item.episode
+                          ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}`
+                          : `/watch/${item.id}?type=tv`;
+                        router.push(url as any);
+                      }}
+                      style={({ pressed }) => [
+                        st.cwCard,
+                        pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                      ]}
+                    >
+                      <Image
+                        source={{ uri: img(item.backdrop_path || item.poster_path, 'w342')! }}
+                        style={st.cwThumb}
+                        contentFit="cover"
+                      />
+                      <View style={st.cwProgressBg}>
+                        <View
+                          style={[st.cwProgressFill, { width: `${Math.max(item.progress, 5)}%` }]}
+                        />
+                      </View>
+                      {item.season && item.episode && (
+                        <View style={st.cwBadge}>
+                          <Text style={st.cwBadgeText}>
+                            S{item.season} E{item.episode}
+                          </Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+            <ContentRow title="Popular Series" data={data.popularTv || []} type="tv" />
+            <ContentRow title="Airing Today" data={data.airingToday || []} type="tv" />
+            <ContentRow title="Top Rated Series" data={data.topRatedTv || []} type="tv" />
+            <ContentRow title="On The Air" data={data.onTheAir || []} type="tv" />
+          </>
+        )}
       </View>
 
       <View style={{ height: Layout.tabBarH + S.md }} />
@@ -278,8 +400,6 @@ const st = StyleSheet.create({
 
   // Hero
   hero: {
-    width: SCREEN_W,
-    height: HERO_H,
     justifyContent: 'flex-end',
   },
   topBar: {
@@ -307,6 +427,7 @@ const st = StyleSheet.create({
   heroContent: {
     paddingHorizontal: S.screen,
     paddingBottom: S.lg,
+    paddingTop: 60,
   },
   heroBadge: {
     alignSelf: 'flex-start',
@@ -361,6 +482,35 @@ const st = StyleSheet.create({
     borderRadius: R.pill,
   },
   heroListText: { ...T.button, color: C.text },
+
+  // Category switcher
+  categoryRow: {
+    flexDirection: 'row',
+    paddingHorizontal: S.screen,
+    gap: S.sm,
+    marginBottom: S.md,
+    marginTop: S.sm,
+  },
+  categoryPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: R.pill,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  categoryPillActive: {
+    backgroundColor: 'rgba(229,9,20,0.15)',
+    borderColor: C.accent,
+  },
+  categoryText: {
+    ...T.button,
+    fontSize: 13,
+    color: C.text2,
+  },
+  categoryTextActive: {
+    color: C.text,
+  },
 
   // Content
   content: { marginTop: -S.sm },

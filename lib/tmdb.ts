@@ -22,6 +22,8 @@ export const nowPlayingMovies = () => get<any>('/movie/now_playing');
 export const upcomingMovies = () => get<any>('/movie/upcoming');
 export const popularTV = () => get<any>('/tv/popular');
 export const topRatedTV = () => get<any>('/tv/top_rated');
+export const airingTodayTV = () => get<any>('/tv/airing_today');
+export const onTheAirTV = () => get<any>('/tv/on_the_air');
 export const movieDetail = (id: number) => get<any>(`/movie/${id}`, { append_to_response: 'videos,credits,similar' });
 export const tvDetail = (id: number) => get<any>(`/tv/${id}`, { append_to_response: 'videos,credits,similar' });
 export const seasonDetail = (tvId: number, s: number) => get<any>(`/tv/${tvId}/season/${s}`);

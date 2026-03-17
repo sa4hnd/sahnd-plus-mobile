@@ -79,6 +79,19 @@ export interface WatchHistoryItem {
   completed: boolean;
 }
 
+export interface Channel {
+  id: string;
+  name: string;
+  category: string;
+  logo?: string;
+  stream_url: string;
+}
+
+export interface ChannelCategory {
+  name: string;
+  channels: Channel[];
+}
+
 export interface WatchlistItem {
   id: number;
   type: 'movie' | 'tv';

@@ -1,57 +1,85 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, FlatList, Pressable,
   StyleSheet, Dimensions, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, Stack } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { searchMulti, img, movieGenres, tvGenres } from '@/lib/tmdb';
+import { Radio, Clock } from 'lucide-react-native';
+import { searchMulti, img } from '@/lib/tmdb';
+import { fetchChannels } from '@/lib/channels';
 import { C, S, R, Layout, T } from '@/lib/design';
-import { Movie, Genre } from '@/types';
+import { Movie, Channel } from '@/types';
 
 const { width: SW } = Dimensions.get('window');
 const COLS = 3;
 const GAP = S.rowGap;
 const CARD_W = (SW - S.screen * 2 - GAP * (COLS - 1)) / COLS;
+const RECENT_KEY = 'sahnd_recent_searches';
+
+async function getRecent(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(RECENT_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function addRecent(q: string) {
+  const list = await getRecent();
+  const filtered = list.filter(s => s !== q);
+  filtered.unshift(q);
+  await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(filtered.slice(0, 15)));
+}
+
+async function clearRecent() {
+  await AsyncStorage.removeItem(RECENT_KEY);
+}
 
 export default function SearchScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Movie[]>([]);
-  const [genres, setGenres] = useState<Genre[]>([]);
+  const [channelResults, setChannelResults] = useState<Channel[]>([]);
+  const [allChannels, setAllChannels] = useState<Channel[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<TextInput>(null);
 
-  useState(() => {
-    Promise.all([movieGenres(), tvGenres()]).then(([mg, tg]) => {
-      const all = [...mg.genres, ...tg.genres].filter(
-        (g: Genre, i: number, arr: Genre[]) => arr.findIndex((x: Genre) => x.id === g.id) === i,
-      );
-      setGenres(all);
-    });
-  });
+  useEffect(() => {
+    fetchChannels()
+      .then(cats => setAllChannels(cats.flatMap(c => c.channels)))
+      .catch(() => {});
+    getRecent().then(setRecentSearches);
+  }, []);
 
   const search = useCallback((q: string) => {
     setQuery(q);
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!q.trim()) { setResults([]); return; }
+    if (!q.trim()) { setResults([]); setChannelResults([]); return; }
+
+    const lq = q.toLowerCase();
+    setChannelResults(allChannels.filter(ch =>
+      ch.name.toLowerCase().includes(lq) || ch.category.toLowerCase().includes(lq)
+    ));
+
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const data = await searchMulti(q);
         setResults((data.results || []).filter((r: Movie) => r.media_type !== 'person' && r.poster_path));
+        addRecent(q.trim());
+        getRecent().then(setRecentSearches);
       } catch { setResults([]); }
       setLoading(false);
     }, 350);
-  }, []);
+  }, [allChannels]);
+
+  const hasResults = results.length > 0 || channelResults.length > 0;
 
   return (
     <KeyboardAvoidingView style={st.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header */}
       <View style={st.header}>
         <View style={st.headerTop}>
           <Text style={st.title}>Search</Text>
@@ -62,9 +90,8 @@ export default function SearchScreen() {
         <View style={st.searchBar}>
           <Text style={st.searchIcon}>{'\u2315'}</Text>
           <TextInput
-            ref={inputRef}
             style={st.input}
-            placeholder="Movies, shows, genres..."
+            placeholder="Movies, shows, channels..."
             placeholderTextColor={C.text3}
             value={query}
             onChangeText={search}
@@ -76,28 +103,76 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      {/* Results */}
-      {results.length > 0 ? (
+      {hasResults ? (
         <FlatList
-          data={results}
-          numColumns={COLS}
-          keyExtractor={i => `${i.id}`}
-          renderItem={({ item }) => {
-            const type = item.media_type === 'tv' || item.first_air_date ? 'tv' : 'movie';
-            return (
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); router.push(`/${type}/${item.id}` as any); }}
-                style={({ pressed }) => [st.card, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
-              >
-                <Image source={{ uri: img(item.poster_path, 'w342')! }} style={st.poster} contentFit="cover" transition={200} />
-              </Pressable>
-            );
-          }}
-          contentContainerStyle={st.list}
-          columnWrapperStyle={{ gap: GAP }}
-          showsVerticalScrollIndicator={false}
+          data={[]}
+          renderItem={null}
           keyboardDismissMode="on-drag"
-          ListHeaderComponent={<Text style={st.resultCount}>{results.length} results</Text>}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          ListHeaderComponent={
+            <>
+              {channelResults.length > 0 && (
+                <View style={st.channelSection}>
+                  <Text style={st.sectionLabel}>Channels ({channelResults.length})</Text>
+                  <FlatList
+                    data={channelResults.slice(0, 20)}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={ch => ch.id}
+                    contentContainerStyle={{ paddingHorizontal: S.screen, gap: 10 }}
+                    renderItem={({ item }) => (
+                      <Pressable
+                        onPress={() => { Haptics.selectionAsync(); router.dismiss(); router.push(`/channel/${item.id}` as any); }}
+                        style={({ pressed }) => [st.chCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                      >
+                        {item.logo ? (
+                          <Image source={{ uri: item.logo }} style={st.chLogo} contentFit="contain" />
+                        ) : (
+                          <View style={[st.chLogo, st.chLogoFallback]}>
+                            <Text style={st.chLogoText}>{item.name.slice(0, 2)}</Text>
+                          </View>
+                        )}
+                        <View style={st.chInfo}>
+                          <Text style={st.chName} numberOfLines={1}>{item.name}</Text>
+                          <View style={st.chMeta}>
+                            <Radio size={8} color={C.accent} />
+                            <Text style={st.chCat}>{item.category}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    )}
+                  />
+                </View>
+              )}
+
+              {results.length > 0 && (
+                <View style={st.mediaSection}>
+                  <Text style={st.sectionLabel}>Movies & Shows ({results.length})</Text>
+                  <View style={st.mediaGrid}>
+                    {results.map(item => {
+                      const type = item.media_type === 'tv' || item.first_air_date ? 'tv' : 'movie';
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => { Haptics.selectionAsync(); router.dismiss(); router.push(`/${type}/${item.id}` as any); }}
+                          style={({ pressed }) => [st.card, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                        >
+                          <Image source={{ uri: img(item.poster_path, 'w342')! }} style={st.poster} contentFit="cover" transition={200} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {loading && (
+                <View style={{ paddingVertical: 20 }}>
+                  <ActivityIndicator color={C.accent} />
+                </View>
+              )}
+            </>
+          }
         />
       ) : loading ? (
         <View style={st.empty}><ActivityIndicator color={C.accent} size="large" /></View>
@@ -106,19 +181,31 @@ export default function SearchScreen() {
           <Text style={st.emptyText}>No results for "{query}"</Text>
         </View>
       ) : (
-        <View style={st.genreWrap}>
-          <Text style={st.genreTitle}>Browse by Genre</Text>
-          <View style={st.genres}>
-            {genres.slice(0, 20).map(g => (
-              <Pressable
-                key={g.id}
-                onPress={() => { Haptics.selectionAsync(); router.push(`/genre/${g.id}` as any); }}
-                style={({ pressed }) => [st.genrePill, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={st.genrePillText}>{g.name}</Text>
-              </Pressable>
-            ))}
-          </View>
+        <View style={st.recentWrap}>
+          {recentSearches.length > 0 ? (
+            <>
+              <View style={st.recentHeader}>
+                <Text style={st.recentTitle}>Recent Searches</Text>
+                <Pressable onPress={() => { clearRecent(); setRecentSearches([]); }}>
+                  <Text style={st.clearBtn}>Clear</Text>
+                </Pressable>
+              </View>
+              {recentSearches.map((s, i) => (
+                <Pressable
+                  key={`${s}-${i}`}
+                  onPress={() => search(s)}
+                  style={st.recentRow}
+                >
+                  <Clock size={14} color={C.text3} />
+                  <Text style={st.recentText}>{s}</Text>
+                </Pressable>
+              ))}
+            </>
+          ) : (
+            <View style={st.empty}>
+              <Text style={st.emptyText}>Search for movies, shows, or channels</Text>
+            </View>
+          )}
         </View>
       )}
     </KeyboardAvoidingView>
@@ -134,15 +221,31 @@ const st = StyleSheet.create({
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: R.md, height: 40, paddingHorizontal: 12, gap: 8 },
   searchIcon: { color: C.text3, fontSize: 18 },
   input: { flex: 1, height: 40, color: C.text, fontSize: 16 },
-  list: { paddingHorizontal: S.screen, paddingBottom: 40 },
-  resultCount: { ...T.caption, marginBottom: S.sm },
+
+  sectionLabel: { ...T.sectionTitle, fontSize: 14, paddingHorizontal: S.screen, marginBottom: S.sm },
+
+  channelSection: { marginBottom: S.lg },
+  chCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, paddingHorizontal: 12, paddingVertical: 10, borderRadius: R.md, width: 200 },
+  chLogo: { width: 40, height: 40, borderRadius: 8, backgroundColor: C.elevated },
+  chLogoFallback: { justifyContent: 'center', alignItems: 'center' },
+  chLogoText: { color: C.text3, fontSize: 12, fontWeight: '700' },
+  chInfo: { flex: 1 },
+  chName: { ...T.body, fontWeight: '600', fontSize: 13 },
+  chMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  chCat: { ...T.small, color: C.text3 },
+
+  mediaSection: { paddingHorizontal: S.screen },
+  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   card: { width: CARD_W, marginBottom: GAP },
   poster: { width: CARD_W, height: CARD_W * 1.5, borderRadius: R.sm, backgroundColor: C.surface },
+
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { color: C.text3, fontSize: 15 },
-  genreWrap: { paddingHorizontal: S.screen, paddingTop: S.sm },
-  genreTitle: { ...T.sectionTitle, marginBottom: S.md },
-  genres: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
-  genrePill: { backgroundColor: C.surface, paddingHorizontal: S.md, paddingVertical: 10, borderRadius: R.pill },
-  genrePillText: { color: C.text2, fontSize: 13, fontWeight: '600' },
+
+  recentWrap: { paddingHorizontal: S.screen, paddingTop: S.sm, flex: 1 },
+  recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: S.md },
+  recentTitle: { ...T.sectionTitle },
+  clearBtn: { color: C.accent, fontSize: 13, fontWeight: '600' },
+  recentRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.separator },
+  recentText: { color: C.text, fontSize: 15 },
 });
