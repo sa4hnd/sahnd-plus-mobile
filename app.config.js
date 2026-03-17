@@ -3,7 +3,7 @@ const IS_TV = process.env.EXPO_TV === '1';
 const config = {
   expo: {
     name: "SAHND+",
-    slug: "sahnd-plus",
+    slug: "sahndplus",
     version: "1.0.0",
     orientation: "default",
     icon: "./assets/icon.png",
