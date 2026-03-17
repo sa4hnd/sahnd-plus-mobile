@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Pressable, FlatList, StyleSheet,
-  ActivityIndicator, Animated, useWindowDimensions,
+  ActivityIndicator, Animated, useWindowDimensions, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,40 @@ import { useTVRemote } from '@/lib/tv';
 import { Channel } from '@/types';
 
 const STRIP_LOGO = isTV ? 64 : 44;
+
+// Hook for number input via hardware keyboard/remote
+function useNumberInput(onNumber: (num: number) => void) {
+  const [digits, setDigits] = useState('');
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!digits) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const num = parseInt(digits, 10);
+      if (num > 0) onNumber(num);
+      setDigits('');
+    }, 1500);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [digits, onNumber]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' && Platform.OS !== 'web') return;
+    // Listen for hardware key events (number keys on remote/keyboard)
+    const { DeviceEventEmitter } = require('react-native');
+    const sub = DeviceEventEmitter?.addListener?.('onKeyDown', (evt: any) => {
+      const key = evt?.keyCode;
+      // Android KeyEvent: KEYCODE_0=7, KEYCODE_9=16, KEYCODE_NUMPAD_0=144, KEYCODE_NUMPAD_9=153
+      let digit = -1;
+      if (key >= 7 && key <= 16) digit = key - 7;
+      else if (key >= 144 && key <= 153) digit = key - 144;
+      if (digit >= 0) setDigits(prev => prev + digit.toString());
+    });
+    return () => sub?.remove?.();
+  }, []);
+
+  return digits;
+}
 
 export default function ChannelPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -120,6 +154,16 @@ export default function ChannelPlayerScreen() {
 
   const currentIndex = channel ? allChannels.findIndex(ch => ch.id === channel.id) : -1;
 
+  // Number input: type digits on remote to jump to channel
+  const handleNumberInput = useCallback((num: number) => {
+    const idx = num - 1; // Channel 1 = index 0
+    if (idx >= 0 && idx < allChannels.length) {
+      switchChannel(allChannels[idx]);
+    }
+  }, [allChannels, switchChannel]);
+
+  const typedDigits = useNumberInput(handleNumberInput);
+
   if (loading) {
     return (
       <View style={st.center}>
@@ -143,6 +187,18 @@ export default function ChannelPlayerScreen() {
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
 
       <Pressable style={st.playerArea} onPress={toggleControls}>
+        {/* Number input OSD */}
+        {typedDigits ? (
+          <View style={st.numberOSD}>
+            <Text style={st.numberOSDText}>{typedDigits}</Text>
+            <Text style={st.numberOSDSub}>
+              {(() => {
+                const idx = parseInt(typedDigits, 10) - 1;
+                return idx >= 0 && idx < allChannels.length ? allChannels[idx].name : '';
+              })()}
+            </Text>
+          </View>
+        ) : null}
         {/* Video — properly sized for portrait and landscape */}
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {(() => {
@@ -279,4 +335,28 @@ const st = StyleSheet.create({
   stripLogo: { width: '100%', height: '100%' },
   stripFallback: { justifyContent: 'center', alignItems: 'center' },
   stripInitial: { color: '#fff', fontSize: isTV ? 16 : 12, fontWeight: '700' },
+
+  numberOSD: {
+    position: 'absolute',
+    top: isTV ? 40 : 60,
+    right: isTV ? 40 : 16,
+    zIndex: 50,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    minWidth: isTV ? 120 : 80,
+  },
+  numberOSDText: {
+    color: '#fff',
+    fontSize: isTV ? 48 : 32,
+    fontWeight: '800',
+  },
+  numberOSDSub: {
+    color: C.text2,
+    fontSize: isTV ? 16 : 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
 });
