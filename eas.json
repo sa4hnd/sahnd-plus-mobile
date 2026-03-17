@@ -21,13 +21,15 @@
     "preview_android": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "credentialsSource": "local"
       }
     },
     "preview_tv": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "credentialsSource": "local"
       },
       "env": {
         "EXPO_TV": "1"
@@ -35,6 +37,12 @@
     },
     "production": {
       "autoIncrement": true
+    },
+    "production_ios": {
+      "autoIncrement": true,
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     },
     "production_android": {
       "autoIncrement": true,
