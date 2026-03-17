@@ -85,18 +85,29 @@ export default function WatchScreen() {
           setStreamUrl(stream.m3u8);
           setStreamHeaders(stream.headers || {});
         } catch (e: any) {
-          console.log('[Watch] No native stream, using embed player');
-          setUseWebView(true);
+          console.log('[Watch] Stream fetch failed:', e.message);
+          setStreamError(e.message || 'Stream not available');
+          // Do NOT auto-fallback to WebView — show error with retry/embed buttons
         }
         setLoading(false);
       } catch (e: any) {
         console.error('[Watch] Load error:', e.message);
-        setUseWebView(true);
+        setStreamError(e.message || 'Failed to load');
         setLoading(false);
       }
     };
     load();
   }, [tmdbId, mediaType, season, episode]);
+
+  const retryStream = () => {
+    setLoading(true);
+    setStreamError('');
+    setStreamUrl(null);
+    setUseWebView(false);
+    fetchStream(mediaType, tmdbId, season, episode)
+      .then(r => { setStreamUrl(r.m3u8); setStreamHeaders(r.headers || {}); setLoading(false); })
+      .catch(e => { setStreamError(e.message); setLoading(false); });
+  };
 
   const handlePlayerProgress = (seconds: number, dur: number) => {
     if (dur > 0) {
@@ -115,15 +126,11 @@ export default function WatchScreen() {
     router.replace(`/watch/${tmdbId}?type=tv&s=${ep.season_number}&e=${ep.episode_number}` as any);
   };
 
-  // TV remote: play/pause with select, seek with left/right, back to exit
   useTVRemote({
     onSelect: () => {
-      // SahndPlayer handles its own play/pause, but we handle the WebView case
       if (useWebView) return;
     },
-    onPlayPause: () => {
-      // Handled by SahndPlayer natively
-    },
+    onPlayPause: () => {},
     onFastForward: () => {
       if (nextEp) goToEp(nextEp);
     },
@@ -144,8 +151,6 @@ export default function WatchScreen() {
   return (
     <View style={st.container}>
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
-
-      {/* Safe area spacer — black bar above player */}
       <View style={{ height: insets.top, backgroundColor: '#000' }} />
 
       {/* ── PLAYER ── */}
@@ -192,24 +197,17 @@ export default function WatchScreen() {
           </Pressable>
         </View>
       ) : (
+        /* Stream failed — show retry + embed buttons, NOT auto-embed */
         <View style={st.playerArea}>
           <View style={st.playerOverlay}>
             <Text style={[st.loadingText, { color: C.accent, fontSize: 14 }]}>Stream unavailable</Text>
-            <Text style={[st.loadingText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text>
+            {streamError ? <Text style={[st.loadingText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <Pressable onPress={() => setUseWebView(true)} style={st.fallbackBtn}>
-                <Text style={st.fallbackText}>Use Embedded Player</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setLoading(true); setStreamError('');
-                  fetchStream(mediaType, tmdbId, season, episode)
-                    .then(r => { setStreamUrl(r.m3u8); setStreamHeaders(r.headers || {}); setLoading(false); })
-                    .catch(e => { setStreamError(e.message); setLoading(false); });
-                }}
-                style={[st.fallbackBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
-              >
+              <Pressable onPress={retryStream} style={st.fallbackBtn}>
                 <Text style={st.fallbackText}>Retry</Text>
+              </Pressable>
+              <Pressable onPress={() => setUseWebView(true)} style={[st.fallbackBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+                <Text style={st.fallbackText}>Use Embed</Text>
               </Pressable>
             </View>
           </View>
@@ -221,11 +219,8 @@ export default function WatchScreen() {
 
       {/* ── Content ── */}
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
-
-        {/* Title & Metadata */}
         <View style={st.infoSection}>
           <Text style={st.title}>{title}</Text>
-
           <View style={st.metaRow}>
             {detail?.vote_average ? (
               <View style={st.ratingBadge}>
@@ -254,7 +249,6 @@ export default function WatchScreen() {
             </View>
           )}
 
-          {/* Description */}
           <Pressable onPress={() => setDescExpanded(!descExpanded)}>
             <Text style={st.overview} numberOfLines={descExpanded ? undefined : 3}>
               {detail?.overview}
@@ -267,7 +261,6 @@ export default function WatchScreen() {
           </Pressable>
         </View>
 
-        {/* Next Episode CTA */}
         {nextEp && (
           <View style={st.actionSection}>
             <Pressable
@@ -284,14 +277,12 @@ export default function WatchScreen() {
           </View>
         )}
 
-        {/* Episodes List */}
         {mediaType === 'tv' && episodes.length > 0 && (
           <View style={st.epSection}>
             <View style={st.epSectionHeader}>
               <Text style={st.epSectionTitle}>Season {season}</Text>
               <Text style={st.epWatchedCount}>{watchedEps.size}/{episodes.length} watched</Text>
             </View>
-
             {episodes.map(ep => {
               const isActive = ep.episode_number === episode;
               const isWatchedEp = watchedEps.has(ep.episode_number);
@@ -320,7 +311,6 @@ export default function WatchScreen() {
                       </View>
                     )}
                   </View>
-
                   <View style={st.epInfo}>
                     <View style={st.epNameRow}>
                       {isWatchedEp ? (
@@ -340,7 +330,6 @@ export default function WatchScreen() {
           </View>
         )}
 
-        {/* More Like This */}
         {detail?.similar?.results && detail.similar.results.length > 0 && (
           <View style={st.similarSection}>
             <Text style={st.similarTitle}>More Like This</Text>
@@ -348,7 +337,7 @@ export default function WatchScreen() {
               {detail.similar.results.slice(0, 12).map((m: any) => (
                 <Pressable
                   key={m.id}
-                  onPress={() => router.replace(`/${mediaType}/${m.id}` as any)}
+                  onPress={() => router.push(`/${mediaType}/${m.id}` as any)}
                   style={({ pressed }) => [st.similarCard, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
                 >
                   <Image source={{ uri: img(m.poster_path, 'w185')! }} style={st.similarPoster} contentFit="cover" />
@@ -364,8 +353,6 @@ export default function WatchScreen() {
 
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-
-  // ─── Player ───
   playerArea: { width: W, aspectRatio: 16 / 9, backgroundColor: '#000' },
   playerBackdrop: { flex: 1, backgroundColor: '#000' },
   playerOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
@@ -378,53 +365,37 @@ const st = StyleSheet.create({
   },
   fallbackBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: R.pill, backgroundColor: 'rgba(255,255,255,0.1)' },
   fallbackText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-
-  // ─── Info ───
   infoSection: { paddingHorizontal: S.screen, paddingTop: 32, paddingBottom: S.sm },
   title: { fontSize: 22, fontWeight: '700', color: C.text, lineHeight: 28, marginBottom: S.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: S.sm },
-  ratingBadge: {
-    backgroundColor: 'rgba(255,214,10,0.12)',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
-  },
+  ratingBadge: { backgroundColor: 'rgba(255,214,10,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs },
   ratingText: { color: '#FFD60A', fontSize: 13, fontWeight: '700' },
   metaText: { ...T.caption, color: C.text2 },
-  metaPill: {
-    backgroundColor: C.separator, paddingHorizontal: 8, paddingVertical: 2, borderRadius: R.xs,
-  },
+  metaPill: { backgroundColor: C.separator, paddingHorizontal: 8, paddingVertical: 2, borderRadius: R.xs },
   metaPillText: { ...T.small, color: C.text2 },
   genreRow: { flexDirection: 'row', alignItems: 'center', marginBottom: S.md },
   genreDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.text4, marginHorizontal: 8 },
   genreText: { ...T.caption, color: C.text3 },
   overview: { ...T.body, color: C.text2, lineHeight: 21 },
   expandRow: { alignItems: 'center', paddingTop: 4 },
-
-  // ─── Next Episode ───
   actionSection: { paddingHorizontal: S.screen, marginBottom: S.sm },
   nextBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: S.md, paddingVertical: 14,
-    borderRadius: R.pill,
+    backgroundColor: '#FFFFFF', paddingHorizontal: S.md, paddingVertical: 14, borderRadius: R.pill,
   },
   nextLabel: { color: 'rgba(0,0,0,0.4)', fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
   nextTitle: { color: '#000', fontSize: 14, fontWeight: '700' },
-
-  // ─── Episodes ───
   epSection: { paddingHorizontal: S.screen, marginTop: S.sm },
   epSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: S.md },
   epSectionTitle: { ...T.sectionTitle, fontSize: 18, fontWeight: '700' },
   epWatchedCount: { ...T.small, color: C.text3 },
   epRow: {
-    flexDirection: 'row', gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.separator,
+    flexDirection: 'row', gap: 12, paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.separator,
   },
   epRowActive: {
     backgroundColor: 'rgba(229,9,20,0.06)',
-    marginHorizontal: -12, paddingHorizontal: 12,
-    borderRadius: R.md, borderBottomWidth: 0,
+    marginHorizontal: -12, paddingHorizontal: 12, borderRadius: R.md, borderBottomWidth: 0,
   },
   epThumb: { width: 130, height: 73, borderRadius: R.sm, overflow: 'hidden', backgroundColor: C.surface },
   epThumbEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -436,8 +407,7 @@ const st = StyleSheet.create({
   eqBar: { width: 3, backgroundColor: C.accent, borderRadius: 2 },
   epDurBadge: {
     position: 'absolute', bottom: 4, right: 4,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: R.xs,
+    backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: R.xs,
   },
   epDurText: { color: '#fff', fontSize: 9, fontWeight: '600' },
   epInfo: { flex: 1, justifyContent: 'center' },
@@ -445,8 +415,6 @@ const st = StyleSheet.create({
   epNum: { color: C.text3, fontSize: 13, fontWeight: '700', width: 18 },
   epName: { flex: 1, color: C.text, fontSize: 14, fontWeight: '600' },
   epDesc: { ...T.small, color: C.text3, lineHeight: 17 },
-
-  // ─── Similar ───
   similarSection: { marginTop: S.lg, paddingBottom: S.md },
   similarTitle: { ...T.sectionTitle, fontSize: 18, fontWeight: '700', paddingHorizontal: S.screen, marginBottom: S.md },
   similarCard: { width: 110 },

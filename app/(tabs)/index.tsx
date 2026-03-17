@@ -103,9 +103,9 @@ export default function HomeScreen() {
   const heroWatchUrl = lastWatched
     ? lastWatched.type === 'tv' && lastWatched.season && lastWatched.episode
       ? `/watch/${lastWatched.id}?type=tv&s=${lastWatched.season}&e=${lastWatched.episode}`
-      : `/watch/${lastWatched.id}?type=${lastWatched.type}`
+      : `/watch/${lastWatched.id}?type=${lastWatched.type}${lastWatched.type === 'tv' ? '&s=1&e=1' : ''}`
     : heroItem
-      ? `/watch/${heroItem.id}?type=${heroType}`
+      ? `/watch/${heroItem.id}?type=${heroType}${heroType === 'tv' ? '&s=1&e=1' : ''}`
       : '/';
 
   return (
@@ -354,7 +354,7 @@ export default function HomeScreen() {
                         if (!isTV) Haptics.selectionAsync();
                         const url = item.season && item.episode
                           ? `/watch/${item.id}?type=tv&s=${item.season}&e=${item.episode}`
-                          : `/watch/${item.id}?type=tv`;
+                          : `/watch/${item.id}?type=tv&s=1&e=1`;
                         router.push(url as any);
                       }}
                       style={({ pressed }) => [
