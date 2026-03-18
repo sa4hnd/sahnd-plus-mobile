@@ -29,9 +29,17 @@ const config = {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#0a0a0a"
       },
-      package: "com.sahnd.plus",
+      package: IS_TV ? "com.sahnd.plus.tv" : "com.sahnd.plus",
       permissions: [],
-      ...(IS_TV ? { banner: "./assets/tv-banner.png" } : {})
+      ...(IS_TV ? {
+        banner: "./assets/tv-banner.png",
+        intentFilters: [
+          {
+            action: "android.intent.action.MAIN",
+            category: ["android.intent.category.LEANBACK_LAUNCHER"]
+          }
+        ]
+      } : {})
     },
     web: {
       bundler: "metro",

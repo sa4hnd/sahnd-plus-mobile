@@ -56,8 +56,8 @@ export default function ChannelNumberInput({ allChannels, navigate = true, onSwi
         ref={inputRef}
         autoFocus
         style={st.hiddenInput}
-        keyboardType="number-pad"
         caretHidden
+        showSoftInputOnFocus={false}
         onChangeText={(text) => {
           const last = text.slice(-1);
           if (/^[0-9]$/.test(last)) addDigit(last);

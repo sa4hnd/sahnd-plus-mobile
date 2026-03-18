@@ -42,7 +42,7 @@ function ChannelCard({ channel, isFirst, cardSize, number }: { channel: Channel;
           source={{ uri: channel.logo }}
           style={{ width: cardSize * 0.5, height: cardSize * 0.5 }}
           contentFit="contain"
-          transition={150}
+          cachePolicy="memory-disk"
           recyclingKey={`ch-${channel.id}`}
         />
       ) : (
