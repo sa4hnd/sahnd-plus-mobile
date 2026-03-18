@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { C, isTV } from '@/lib/design';
 import { Channel } from '@/types';
 
 interface Props {
   allChannels: Channel[];
-  /** If true, navigates to channel. If false, calls onSwitch */
   navigate?: boolean;
   onSwitch?: (channel: Channel) => void;
 }
@@ -15,7 +14,6 @@ export default function ChannelNumberInput({ allChannels, navigate = true, onSwi
   const router = useRouter();
   const [digits, setDigits] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<any>(null);
 
   useEffect(() => {
     if (!digits) return;
@@ -35,55 +33,22 @@ export default function ChannelNumberInput({ allChannels, navigate = true, onSwi
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [digits, allChannels, router, navigate, onSwitch]);
 
-  const addDigit = useCallback((d: string) => {
-    setDigits(prev => prev + d);
-  }, []);
+  // Expose addDigit for TV remote number keys (called from useTVRemote)
+  const targetChannel = digits ? allChannels[parseInt(digits, 10) - 1] : null;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      inputRef.current?.focus?.();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const targetChannel = digits
-    ? allChannels[parseInt(digits, 10) - 1]
-    : null;
+  if (!digits) return null;
 
   return (
-    <>
-      <TextInput
-        ref={inputRef}
-        autoFocus
-        style={st.hiddenInput}
-        caretHidden
-        showSoftInputOnFocus={false}
-        onChangeText={(text) => {
-          const last = text.slice(-1);
-          if (/^[0-9]$/.test(last)) addDigit(last);
-        }}
-        value=""
-      />
-      {digits ? (
-        <View style={st.osd}>
-          <Text style={st.osdNumber}>{digits}</Text>
-          {targetChannel && (
-            <Text style={st.osdName} numberOfLines={1}>{targetChannel.name}</Text>
-          )}
-        </View>
-      ) : null}
-    </>
+    <View style={st.osd} pointerEvents="none">
+      <Text style={st.osdNumber}>{digits}</Text>
+      {targetChannel && (
+        <Text style={st.osdName} numberOfLines={1}>{targetChannel.name}</Text>
+      )}
+    </View>
   );
 }
 
 const st = StyleSheet.create({
-  hiddenInput: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    opacity: 0,
-    top: -100,
-  },
   osd: {
     position: 'absolute',
     top: isTV ? 40 : 80,

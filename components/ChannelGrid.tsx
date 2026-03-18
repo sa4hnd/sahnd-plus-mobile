@@ -1,18 +1,20 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { View, Text, Pressable, FlatList, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { C, S, T, TVFocus, isTV } from '@/lib/design';
+import { C, S, T, isTV } from '@/lib/design';
 import { ChannelCategory, Channel } from '@/types';
 
-const GAP = isTV ? 12 : 10;
+const GAP = isTV ? 14 : 10;
 
 interface Props {
   categories: ChannelCategory[];
 }
 
-function ChannelCard({ channel, isFirst, cardSize, number }: { channel: Channel; isFirst: boolean; cardSize: number; number: number }) {
+const ChannelCard = memo(({ channel, isFirst, cardSize, number }: {
+  channel: Channel; isFirst: boolean; cardSize: number; number: number;
+}) => {
   const router = useRouter();
   const [focused, setFocused] = useState(false);
 
@@ -25,15 +27,14 @@ function ChannelCard({ channel, isFirst, cardSize, number }: { channel: Channel;
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       {...(isTV && isFirst ? { hasTVPreferredFocus: true } : {})}
-      style={({ pressed }) => [
+      style={[
         st.card,
         { width: cardSize, height: cardSize + (isTV ? 28 : 0) },
-        pressed && !isTV && { opacity: 0.85, transform: [{ scale: 0.96 }] },
-        isTV && focused && st.cardFocused,
+        focused && st.cardFocused,
       ]}
     >
-      {/* Channel number badge */}
-      <View style={st.numberBadge}>
+      {/* Channel number */}
+      <View style={[st.numberBadge, focused && st.numberBadgeFocused]}>
         <Text style={st.numberText}>{number}</Text>
       </View>
 
@@ -50,20 +51,20 @@ function ChannelCard({ channel, isFirst, cardSize, number }: { channel: Channel;
       )}
 
       {isTV && (
-        <Text style={st.channelName} numberOfLines={1}>{channel.name}</Text>
+        <Text style={[st.channelName, focused && st.channelNameFocused]} numberOfLines={1}>
+          {channel.name}
+        </Text>
       )}
     </Pressable>
   );
-}
+});
 
 export default function ChannelGrid({ categories }: Props) {
   const { width } = useWindowDimensions();
-  // Aim for ~100px cards, min 3 cols mobile / 6 TV
   const targetSize = isTV ? 110 : 100;
   const cols = Math.max(3, Math.floor((width - S.screen * 2) / (targetSize + GAP)));
   const cardSize = (width - S.screen * 2 - GAP * (cols - 1)) / cols;
 
-  // Build global channel numbering
   let globalIndex = 1;
   const numberedCategories = categories.map(cat => ({
     ...cat,
@@ -108,13 +109,16 @@ const st = StyleSheet.create({
     backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: isTV ? TVFocus.borderWidth : 0,
+    overflow: 'visible',
+    borderWidth: 3,
     borderColor: 'transparent',
   },
   cardFocused: {
-    borderColor: TVFocus.borderColor,
-    transform: [{ scale: TVFocus.scale }],
+    borderColor: C.accent,
+    backgroundColor: '#2A2A2A',
+    transform: [{ scale: 1.1 }],
+    zIndex: 10,
+    elevation: 10,
   },
   numberBadge: {
     position: 'absolute',
@@ -126,11 +130,13 @@ const st = StyleSheet.create({
     borderRadius: 6,
     zIndex: 1,
   },
+  numberBadgeFocused: {
+    backgroundColor: C.accent,
+  },
   numberText: {
     color: '#fff',
     fontSize: isTV ? 13 : 10,
     fontWeight: '700',
-    opacity: 0.8,
   },
   channelName: {
     color: C.text3,
@@ -139,6 +145,9 @@ const st = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 4,
     textAlign: 'center',
+  },
+  channelNameFocused: {
+    color: '#fff',
   },
   initials: {
     fontSize: isTV ? 22 : 20,
