@@ -82,6 +82,7 @@ export default function ChannelGrid({ categories }: Props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: S.screen, gap: GAP }}
             keyExtractor={(ch) => ch.id}
+            {...(isTV ? { removeClippedSubviews: false } : {})}
             renderItem={({ item, index }) => (
               <ChannelCard
                 channel={item}

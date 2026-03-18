@@ -7,7 +7,9 @@ import * as Haptics from 'expo-haptics';
 import { movieDetail, img, backdrop as bdrop } from '@/lib/tmdb';
 import { addToWatchlist, removeFromWatchlist, isInWatchlist } from '@/lib/storage';
 import { Colors, Spacing, Radius } from '@/lib/theme';
+import { isTV } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
+import TVPressable from '@/components/TVPressable';
 import { MovieDetail, CastMember } from '@/types';
 
 const { width: W } = Dimensions.get('window');
@@ -56,9 +58,9 @@ export default function MovieDetailScreen() {
           {bg && <Image source={{ uri: bg }} style={StyleSheet.absoluteFill} contentFit="cover" />}
           <LinearGradient colors={['transparent', Colors.bg]} style={[StyleSheet.absoluteFill, { top: '40%' }]} />
           {/* Back button */}
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <TVPressable onPress={() => router.back()} style={styles.backBtn}>
             <Text style={{ color: '#fff', fontSize: 20 }}>‹</Text>
-          </Pressable>
+          </TVPressable>
         </View>
 
         <View style={styles.body}>
@@ -75,9 +77,9 @@ export default function MovieDetailScreen() {
               {/* Genres */}
               <View style={styles.genres}>
                 {movie.genres?.slice(0, 3).map(g => (
-                  <Pressable key={g.id} onPress={() => router.push(`/genre/${g.id}` as any)} style={styles.genrePill}>
+                  <TVPressable key={g.id} onPress={() => router.push(`/genre/${g.id}` as any)} style={styles.genrePill}>
                     <Text style={styles.genreText}>{g.name}</Text>
-                  </Pressable>
+                  </TVPressable>
                 ))}
               </View>
             </View>
@@ -85,16 +87,17 @@ export default function MovieDetailScreen() {
 
           {/* Actions */}
           <View style={styles.actions}>
-            <Pressable
+            <TVPressable
               onPress={() => router.push(`/watch/${movie.id}?type=movie` as any)}
+              {...(isTV ? { hasTVPreferredFocus: true } : {})}
               style={({ pressed }) => [styles.watchBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
             >
               <Text style={styles.watchBtnIcon}>▶</Text>
               <Text style={styles.watchBtnText}>Watch Now</Text>
-            </Pressable>
-            <Pressable onPress={toggleWatchlist} style={styles.listBtn}>
+            </TVPressable>
+            <TVPressable onPress={toggleWatchlist} style={styles.listBtn}>
               <Text style={styles.listBtnText}>{inList ? '✓' : '+'}</Text>
-            </Pressable>
+            </TVPressable>
           </View>
 
           {/* Tagline */}

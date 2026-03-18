@@ -8,7 +8,8 @@ import { getWatchlist, removeFromWatchlist } from '@/lib/storage';
 import { getFavoriteChannels, toggleFavoriteChannel } from '@/lib/channelFavorites';
 import { fetchChannels } from '@/lib/channels';
 import { img } from '@/lib/tmdb';
-import { C, S, R, Layout, T } from '@/lib/design';
+import { C, S, R, Layout, T, isTV } from '@/lib/design';
+import TVPressable from '@/components/TVPressable';
 import { WatchlistItem, Channel } from '@/types';
 
 const { width: SW } = Dimensions.get('window');
@@ -60,9 +61,9 @@ export default function WatchlistScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={st.header}>
         <Text style={st.title}>My List</Text>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <TVPressable onPress={() => router.back()} hitSlop={12}>
           <X size={24} color={C.text} strokeWidth={2} />
-        </Pressable>
+        </TVPressable>
       </View>
 
       {hasContent ? (
@@ -78,8 +79,8 @@ export default function WatchlistScreen() {
                 keyExtractor={ch => ch.id}
                 contentContainerStyle={{ paddingHorizontal: S.screen, gap: 12 }}
                 renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => { Haptics.selectionAsync(); router.dismiss(); router.push(`/channel/${item.id}` as any); }}
+                  <TVPressable
+                    onPress={() => { Haptics.selectionAsync(); if (isTV) { router.back(); } else { router.dismiss(); } router.push(`/channel/${item.id}` as any); }}
                     onLongPress={() => removeFavChannel(item)}
                     style={({ pressed }) => [st.chCard, pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] }]}
                   >
@@ -91,7 +92,7 @@ export default function WatchlistScreen() {
                       )}
                     </View>
                     <Text style={st.chName} numberOfLines={1}>{item.name}</Text>
-                  </Pressable>
+                  </TVPressable>
                 )}
               />
             </View>
@@ -102,15 +103,16 @@ export default function WatchlistScreen() {
             <View style={st.section}>
               <Text style={st.sectionTitle}>Movies & Shows</Text>
               <View style={st.mediaGrid}>
-                {items.map(item => (
-                  <Pressable
+                {items.map((item, idx) => (
+                  <TVPressable
                     key={`${item.type}-${item.id}`}
                     onPress={() => { Haptics.selectionAsync(); router.push(`/${item.type}/${item.id}` as any); }}
                     onLongPress={() => remove(item)}
+                    {...(isTV && idx === 0 ? { hasTVPreferredFocus: true } : {})}
                     style={({ pressed }) => [st.card, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
                   >
                     <Image source={{ uri: img(item.poster_path, 'w342')! }} style={st.poster} contentFit="cover" transition={200} />
-                  </Pressable>
+                  </TVPressable>
                 ))}
               </View>
             </View>

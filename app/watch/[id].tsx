@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, FlatList, StyleSheet, Dimensions, ActivityIndicator, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
+
+// Optional native modules — not available until next native build
+let ScreenOrientation: any = null;
+let NavigationBar: any = null;
+try { ScreenOrientation = require('expo-screen-orientation'); } catch {}
+try { NavigationBar = require('expo-navigation-bar'); } catch {}
 import { ChevronLeft, SkipForward, Check, Play, ChevronDown } from 'lucide-react-native';
 import SahndPlayer from '@/components/SahndPlayer';
 import { fetchStream } from '@/lib/streamApi';
@@ -12,6 +19,7 @@ import { addToHistory, markWatched, updateProgress, isWatched as checkWatched, g
 import { movieDetail, tvDetail, seasonDetail, img } from '@/lib/tmdb';
 import { C, S, R, T, isTV } from '@/lib/design';
 import { useTVRemote } from '@/lib/tv';
+import TVPressable from '@/components/TVPressable';
 import { MovieDetail, Episode } from '@/types';
 
 const { width: W } = Dimensions.get('window');
@@ -35,6 +43,24 @@ export default function WatchScreen() {
   const [loading, setLoading] = useState(true);
   const [savedPosition, setSavedPosition] = useState(0);
   const [descExpanded, setDescExpanded] = useState(false);
+
+  // Immersive fullscreen: hide status bar + nav bar, unlock orientation
+  useEffect(() => {
+    if (Platform.OS === 'android' && NavigationBar) {
+      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
+    }
+    if (ScreenOrientation) ScreenOrientation.unlockAsync().catch(() => {});
+
+    return () => {
+      if (Platform.OS === 'android' && NavigationBar) {
+        NavigationBar.setVisibilityAsync('visible').catch(() => {});
+      }
+      if (ScreenOrientation) {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      }
+    };
+  }, []);
 
   const title = detail?.title || detail?.name || '';
   const currentEp = episodes.find(ep => ep.episode_number === episode);
@@ -150,8 +176,8 @@ export default function WatchScreen() {
 
   return (
     <View style={st.container}>
+      <StatusBar hidden />
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
-      <View style={{ height: insets.top, backgroundColor: '#000' }} />
 
       {/* ── PLAYER ── */}
       {loading ? (
@@ -165,9 +191,9 @@ export default function WatchScreen() {
               <Text style={st.loadingText}>Loading stream…</Text>
             </View>
           </View>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
+          <TVPressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
             <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
-          </Pressable>
+          </TVPressable>
         </View>
       ) : streamUrl && !useWebView ? (
         <SahndPlayer
@@ -192,9 +218,9 @@ export default function WatchScreen() {
             injectedJavaScript={`window.open=function(){return null};setInterval(function(){document.querySelectorAll('a[target="_blank"]').forEach(function(e){e.remove()})},1500);true;`}
             onShouldStartLoadWithRequest={(req) => req.url.includes(new URL(getEmbedUrl()).hostname)}
           />
-          <Pressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
+          <TVPressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
             <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
-          </Pressable>
+          </TVPressable>
         </View>
       ) : (
         /* Stream failed — show retry + embed buttons, NOT auto-embed */
@@ -203,17 +229,17 @@ export default function WatchScreen() {
             <Text style={[st.loadingText, { color: C.accent, fontSize: 14 }]}>Stream unavailable</Text>
             {streamError ? <Text style={[st.loadingText, { fontSize: 11, marginTop: 4 }]}>{streamError}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <Pressable onPress={retryStream} style={st.fallbackBtn}>
+              <TVPressable onPress={retryStream} style={st.fallbackBtn} {...(isTV ? { hasTVPreferredFocus: true } : {})}>
                 <Text style={st.fallbackText}>Retry</Text>
-              </Pressable>
-              <Pressable onPress={() => setUseWebView(true)} style={[st.fallbackBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+              </TVPressable>
+              <TVPressable onPress={() => setUseWebView(true)} style={[st.fallbackBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
                 <Text style={st.fallbackText}>Use Embed</Text>
-              </Pressable>
+              </TVPressable>
             </View>
           </View>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
+          <TVPressable onPress={() => router.back()} hitSlop={12} style={st.backBtn}>
             <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
-          </Pressable>
+          </TVPressable>
         </View>
       )}
 
@@ -249,7 +275,7 @@ export default function WatchScreen() {
             </View>
           )}
 
-          <Pressable onPress={() => setDescExpanded(!descExpanded)}>
+          <TVPressable onPress={() => setDescExpanded(!descExpanded)}>
             <Text style={st.overview} numberOfLines={descExpanded ? undefined : 3}>
               {detail?.overview}
             </Text>
@@ -258,12 +284,12 @@ export default function WatchScreen() {
                 <ChevronDown size={14} color={C.text2} style={descExpanded ? { transform: [{ rotate: '180deg' }] } : undefined} />
               </View>
             )}
-          </Pressable>
+          </TVPressable>
         </View>
 
         {nextEp && (
           <View style={st.actionSection}>
-            <Pressable
+            <TVPressable
               onPress={() => goToEp(nextEp)}
               style={({ pressed }) => [st.nextBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
             >
@@ -273,7 +299,7 @@ export default function WatchScreen() {
                 <Text style={st.nextTitle}>{nextEp.episode_number}. {nextEp.name}</Text>
               </View>
               <SkipForward size={16} color="rgba(0,0,0,0.4)" />
-            </Pressable>
+            </TVPressable>
           </View>
         )}
 
@@ -287,7 +313,7 @@ export default function WatchScreen() {
               const isActive = ep.episode_number === episode;
               const isWatchedEp = watchedEps.has(ep.episode_number);
               return (
-                <Pressable
+                <TVPressable
                   key={ep.id}
                   onPress={() => goToEp(ep)}
                   style={({ pressed }) => [st.epRow, isActive && st.epRowActive, pressed && { opacity: 0.7 }]}
@@ -324,7 +350,7 @@ export default function WatchScreen() {
                     </View>
                     <Text style={st.epDesc} numberOfLines={2}>{ep.overview}</Text>
                   </View>
-                </Pressable>
+                </TVPressable>
               );
             })}
           </View>
@@ -333,17 +359,22 @@ export default function WatchScreen() {
         {detail?.similar?.results && detail.similar.results.length > 0 && (
           <View style={st.similarSection}>
             <Text style={st.similarTitle}>More Like This</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: S.screen, gap: S.rowGap }}>
-              {detail.similar.results.slice(0, 12).map((m: any) => (
-                <Pressable
-                  key={m.id}
+            <FlatList
+              horizontal
+              data={detail.similar.results.slice(0, 12)}
+              keyExtractor={(m: any) => `${m.id}`}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: S.screen, gap: S.rowGap }}
+              renderItem={({ item: m, index }: { item: any; index: number }) => (
+                <TVPressable
                   onPress={() => router.push(`/${mediaType}/${m.id}` as any)}
+                  {...(isTV && index === 0 ? { hasTVPreferredFocus: true } : {})}
                   style={({ pressed }) => [st.similarCard, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
                 >
                   <Image source={{ uri: img(m.poster_path, 'w185')! }} style={st.similarPoster} contentFit="cover" />
-                </Pressable>
-              ))}
-            </ScrollView>
+                </TVPressable>
+              )}
+            />
           </View>
         )}
       </ScrollView>

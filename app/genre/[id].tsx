@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { discoverByGenre, movieGenres, tvGenres, img } from '@/lib/tmdb';
 import { Colors, Spacing, Radius } from '@/lib/theme';
+import { isTV } from '@/lib/design';
+import TVPressable from '@/components/TVPressable';
 import { Movie, Genre } from '@/types';
 
 const { width: W } = Dimensions.get('window');
@@ -37,16 +39,17 @@ export default function GenreScreen() {
     load();
   }, [id]);
 
-  const renderItem = ({ item }: { item: Movie }) => {
+  const renderItem = ({ item, index }: { item: Movie; index: number }) => {
     const type = item.media_type === 'tv' ? 'tv' : 'movie';
     return (
-      <Pressable
+      <TVPressable
         onPress={() => { Haptics.selectionAsync(); router.push(`/${type}/${item.id}` as any); }}
+        {...(isTV && index === 0 ? { hasTVPreferredFocus: true } : {})}
         style={({ pressed }) => [{ width: CARD_W }, pressed && { opacity: 0.8 }]}
       >
         <Image source={{ uri: img(item.poster_path, 'w342')! }} style={{ width: CARD_W, height: CARD_W * 1.5, borderRadius: Radius.lg }} contentFit="cover" />
         <Text style={{ color: Colors.textSecondary, fontSize: 11, marginTop: 4 }} numberOfLines={1}>{item.title || item.name}</Text>
-      </Pressable>
+      </TVPressable>
     );
   };
 

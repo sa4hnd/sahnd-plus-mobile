@@ -10,7 +10,8 @@ import * as Haptics from 'expo-haptics';
 import { Radio, Clock } from 'lucide-react-native';
 import { searchMulti, img } from '@/lib/tmdb';
 import { fetchChannels } from '@/lib/channels';
-import { C, S, R, Layout, T } from '@/lib/design';
+import { C, S, R, Layout, T, isTV } from '@/lib/design';
+import TVPressable from '@/components/TVPressable';
 import { Movie, Channel } from '@/types';
 
 const { width: SW } = Dimensions.get('window');
@@ -37,6 +38,7 @@ async function clearRecent() {
 
 export default function SearchScreen() {
   const router = useRouter();
+  const inputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Movie[]>([]);
   const [channelResults, setChannelResults] = useState<Channel[]>([]);
@@ -71,6 +73,8 @@ export default function SearchScreen() {
         getRecent().then(setRecentSearches);
       } catch { setResults([]); }
       setLoading(false);
+      // Re-focus input so keyboard stays active on TV/Android
+      setTimeout(() => inputRef.current?.focus(), 50);
     }, 350);
   }, [allChannels]);
 
@@ -83,13 +87,14 @@ export default function SearchScreen() {
       <View style={st.header}>
         <View style={st.headerTop}>
           <Text style={st.title}>Search</Text>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <TVPressable onPress={() => router.back()} hitSlop={12}>
             <Text style={st.closeBtn}>{'\u2715'}</Text>
-          </Pressable>
+          </TVPressable>
         </View>
         <View style={st.searchBar}>
           <Text style={st.searchIcon}>{'\u2315'}</Text>
           <TextInput
+            ref={inputRef}
             style={st.input}
             placeholder="Movies, shows, channels..."
             placeholderTextColor={C.text3}
@@ -107,7 +112,7 @@ export default function SearchScreen() {
         <FlatList
           data={[]}
           renderItem={null}
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode={isTV ? 'none' : 'on-drag'}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 40 }}
           ListHeaderComponent={
@@ -122,8 +127,8 @@ export default function SearchScreen() {
                     keyExtractor={ch => ch.id}
                     contentContainerStyle={{ paddingHorizontal: S.screen, gap: 10 }}
                     renderItem={({ item }) => (
-                      <Pressable
-                        onPress={() => { Haptics.selectionAsync(); router.dismiss(); router.push(`/channel/${item.id}` as any); }}
+                      <TVPressable
+                        onPress={() => { Haptics.selectionAsync(); if (isTV) { router.back(); } else { router.dismiss(); } router.push(`/channel/${item.id}` as any); }}
                         style={({ pressed }) => [st.chCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
                       >
                         {item.logo ? (
@@ -140,7 +145,7 @@ export default function SearchScreen() {
                             <Text style={st.chCat}>{item.category}</Text>
                           </View>
                         </View>
-                      </Pressable>
+                      </TVPressable>
                     )}
                   />
                 </View>
@@ -150,16 +155,17 @@ export default function SearchScreen() {
                 <View style={st.mediaSection}>
                   <Text style={st.sectionLabel}>Movies & Shows ({results.length})</Text>
                   <View style={st.mediaGrid}>
-                    {results.map(item => {
+                    {results.map((item, idx) => {
                       const type = item.media_type === 'tv' || item.first_air_date ? 'tv' : 'movie';
                       return (
-                        <Pressable
+                        <TVPressable
                           key={item.id}
-                          onPress={() => { Haptics.selectionAsync(); router.dismiss(); router.push(`/${type}/${item.id}` as any); }}
+                          onPress={() => { Haptics.selectionAsync(); if (isTV) { router.back(); } else { router.dismiss(); } router.push(`/${type}/${item.id}` as any); }}
+                          {...(isTV && idx === 0 ? { hasTVPreferredFocus: true } : {})}
                           style={({ pressed }) => [st.card, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
                         >
                           <Image source={{ uri: img(item.poster_path, 'w342')! }} style={st.poster} contentFit="cover" transition={200} />
-                        </Pressable>
+                        </TVPressable>
                       );
                     })}
                   </View>
@@ -186,19 +192,19 @@ export default function SearchScreen() {
             <>
               <View style={st.recentHeader}>
                 <Text style={st.recentTitle}>Recent Searches</Text>
-                <Pressable onPress={() => { clearRecent(); setRecentSearches([]); }}>
+                <TVPressable onPress={() => { clearRecent(); setRecentSearches([]); }}>
                   <Text style={st.clearBtn}>Clear</Text>
-                </Pressable>
+                </TVPressable>
               </View>
               {recentSearches.map((s, i) => (
-                <Pressable
+                <TVPressable
                   key={`${s}-${i}`}
                   onPress={() => search(s)}
                   style={st.recentRow}
                 >
                   <Clock size={14} color={C.text3} />
                   <Text style={st.recentText}>{s}</Text>
-                </Pressable>
+                </TVPressable>
               ))}
             </>
           ) : (

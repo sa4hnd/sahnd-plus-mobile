@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { I18nManager } from 'react-native';
+import { I18nManager, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import * as Updates from 'expo-updates';
+
+const isTV = Platform.isTV;
 
 // Force LTR layout regardless of device locale (Arabic, Kurdish, etc.)
 if (I18nManager.isRTL) {
@@ -36,8 +38,8 @@ export default function RootLayout() {
         <Stack.Screen name="channel/[id]" options={{ gestureEnabled: true }} />
         <Stack.Screen name="watch/[id]" options={{ gestureEnabled: true }} />
         <Stack.Screen name="genre/[id]" />
-        <Stack.Screen name="search/index" options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureEnabled: true }} />
-        <Stack.Screen name="watchlist/index" options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureEnabled: true }} />
+        <Stack.Screen name="search/index" options={isTV ? {} : { presentation: 'modal', animation: 'slide_from_bottom', gestureEnabled: true }} />
+        <Stack.Screen name="watchlist/index" options={isTV ? {} : { presentation: 'modal', animation: 'slide_from_bottom', gestureEnabled: true }} />
       </Stack>
     </ThemeProvider>
   );

@@ -1,4 +1,4 @@
-import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Dimensions, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassView } from 'expo-glass-effect';
@@ -7,7 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { Play, Plus } from 'lucide-react-native';
 import { Movie } from '@/types';
 import { backdrop } from '@/lib/tmdb';
-import { C, S, R, T } from '@/lib/design';
+import { C, S, R, T, isTV } from '@/lib/design';
+import TVPressable from '@/components/TVPressable';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = SCREEN_H * 0.55;
@@ -48,11 +49,12 @@ export default function HeroBanner({ movie }: Props) {
         </Text>
 
         <View style={st.buttons}>
-          <Pressable
+          <TVPressable
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push(`/watch/${movie.id}?type=${type}` as any);
             }}
+            {...(isTV ? { hasTVPreferredFocus: true } : {})}
             style={({ pressed }) => [
               st.playBtn,
               pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
@@ -60,9 +62,9 @@ export default function HeroBanner({ movie }: Props) {
           >
             <Play size={18} color="#000" fill="#000" strokeWidth={0} />
             <Text style={st.playText}>Play</Text>
-          </Pressable>
+          </TVPressable>
 
-          <Pressable
+          <TVPressable
             onPress={() => {
               Haptics.selectionAsync();
               router.push(`/${type}/${movie.id}` as any);
@@ -73,7 +75,7 @@ export default function HeroBanner({ movie }: Props) {
               <Plus size={18} color={C.text} strokeWidth={2} />
               <Text style={st.listText}>My List</Text>
             </GlassView>
-          </Pressable>
+          </TVPressable>
         </View>
       </View>
     </View>

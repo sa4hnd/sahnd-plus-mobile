@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, RefreshControl, ActivityIndicator,
+  View, Text, ScrollView, FlatList, RefreshControl, ActivityIndicator,
   StyleSheet, Pressable, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -19,6 +19,7 @@ import { C, S, R, Layout, T, isTV } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
 import ChannelGrid from '@/components/ChannelGrid';
 import ChannelNumberInput from '@/components/ChannelNumberInput';
+import TVPressable from '@/components/TVPressable';
 import { Movie, WatchHistoryItem, ChannelCategory } from '@/types';
 
 const CW_THUMB_W = Layout.thumbW;
@@ -152,26 +153,36 @@ export default function HomeScreen() {
             style={isTV ? st.logoTV : st.logo}
             contentFit="contain"
           />
-          {!isTV && (
-            <View style={st.topIcons}>
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); router.push('/watchlist' as any); }}
-                hitSlop={8}
-              >
+          <View style={st.topIcons}>
+            <TVPressable
+              onPress={() => { if (!isTV) Haptics.selectionAsync(); router.push('/watchlist' as any); }}
+              hitSlop={8}
+            >
+              {isTV ? (
+                <View style={st.topIconBtnTV}>
+                  <Bookmark size={isTV ? 28 : 20} color={C.text} strokeWidth={2} />
+                </View>
+              ) : (
                 <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
                   <Bookmark size={20} color={C.text} strokeWidth={2} />
                 </GlassView>
-              </Pressable>
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); router.push('/search' as any); }}
-                hitSlop={8}
-              >
+              )}
+            </TVPressable>
+            <TVPressable
+              onPress={() => { if (!isTV) Haptics.selectionAsync(); router.push('/search' as any); }}
+              hitSlop={8}
+            >
+              {isTV ? (
+                <View style={st.topIconBtnTV}>
+                  <Search size={isTV ? 28 : 20} color={C.text} strokeWidth={2} />
+                </View>
+              ) : (
                 <GlassView style={st.topIconBtn} glassEffectStyle="regular" isInteractive>
                   <Search size={20} color={C.text} strokeWidth={2} />
                 </GlassView>
-              </Pressable>
-            </View>
-          )}
+              )}
+            </TVPressable>
+          </View>
         </View>
 
         {/* Hero content */}
@@ -184,7 +195,7 @@ export default function HomeScreen() {
               </Text>
               <View style={st.heroButtons}>
                 {channels[0]?.channels[0] && (
-                  <Pressable
+                  <TVPressable
                     onPress={() => {
                       if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       router.push(`/channel/${channels[0].channels[0].id}` as any);
@@ -197,7 +208,7 @@ export default function HomeScreen() {
                   >
                     <Play size={isTV ? 24 : 18} color="#000" fill="#000" strokeWidth={0} />
                     <Text style={st.heroPlayText}>Watch Now</Text>
-                  </Pressable>
+                  </TVPressable>
                 )}
               </View>
             </>
@@ -227,7 +238,7 @@ export default function HomeScreen() {
               )}
 
               <View style={st.heroButtons}>
-                <Pressable
+                <TVPressable
                   onPress={() => {
                     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     router.push(heroWatchUrl as any);
@@ -242,7 +253,7 @@ export default function HomeScreen() {
                   <Text style={st.heroPlayText}>
                     {heroIsResume ? 'Resume' : 'Play'}
                   </Text>
-                </Pressable>
+                </TVPressable>
                 {!isTV && (
                   <Pressable
                     onPress={() => {
@@ -265,15 +276,16 @@ export default function HomeScreen() {
 
       {/* ── Category Switcher ── */}
       <View style={st.categoryRow}>
-        {CATEGORIES.map(({ key, label }) => {
+        {CATEGORIES.map(({ key, label }, idx) => {
           const active = key === activeCategory;
           return (
-            <Pressable
+            <TVPressable
               key={key}
               onPress={() => {
                 if (!isTV) Haptics.selectionAsync();
                 setActiveCategory(key);
               }}
+              {...(isTV && idx === 0 ? { hasTVPreferredFocus: true } : {})}
               style={({ pressed }) => [
                 st.categoryPill,
                 active && st.categoryPillActive,
@@ -283,7 +295,7 @@ export default function HomeScreen() {
               <Text style={[st.categoryText, active && st.categoryTextActive]}>
                 {label}
               </Text>
-            </Pressable>
+            </TVPressable>
           );
         })}
       </View>
@@ -302,18 +314,19 @@ export default function HomeScreen() {
             {continueItems.filter(i => i.type === 'movie').length > 0 && (
               <View style={st.section}>
                 <Text style={st.sectionTitle}>Continue Watching</Text>
-                <ScrollView
+                <FlatList
                   horizontal
+                  data={continueItems.filter(i => i.type === 'movie')}
+                  keyExtractor={(item) => `cw-${item.type}-${item.id}`}
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={st.cwRow}
-                >
-                  {continueItems.filter(i => i.type === 'movie').map((item) => (
-                    <Pressable
-                      key={`cw-${item.type}-${item.id}`}
+                  renderItem={({ item, index }) => (
+                    <TVPressable
                       onPress={() => {
                         if (!isTV) Haptics.selectionAsync();
                         router.push(`/watch/${item.id}?type=${item.type}` as any);
                       }}
+                      {...(isTV && index === 0 ? { hasTVPreferredFocus: true } : {})}
                       style={({ pressed }) => [
                         st.cwCard,
                         pressed && !isTV && { opacity: 0.85, transform: [{ scale: 0.97 }] },
@@ -329,9 +342,9 @@ export default function HomeScreen() {
                           style={[st.cwProgressFill, { width: `${Math.max(item.progress, 5)}%` }]}
                         />
                       </View>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                    </TVPressable>
+                  )}
+                />
               </View>
             )}
             <ContentRow title="Trending Now" data={data.trending?.slice(1) || []} />
@@ -346,14 +359,14 @@ export default function HomeScreen() {
             {continueItems.filter(i => i.type === 'tv').length > 0 && (
               <View style={st.section}>
                 <Text style={st.sectionTitle}>Continue Watching</Text>
-                <ScrollView
+                <FlatList
                   horizontal
+                  data={continueItems.filter(i => i.type === 'tv')}
+                  keyExtractor={(item) => `cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={st.cwRow}
-                >
-                  {continueItems.filter(i => i.type === 'tv').map((item) => (
-                    <Pressable
-                      key={`cw-${item.type}-${item.id}-${item.season}-${item.episode}`}
+                  renderItem={({ item, index }) => (
+                    <TVPressable
                       onPress={() => {
                         if (!isTV) Haptics.selectionAsync();
                         const url = item.season && item.episode
@@ -361,6 +374,7 @@ export default function HomeScreen() {
                           : `/watch/${item.id}?type=tv&s=1&e=1`;
                         router.push(url as any);
                       }}
+                      {...(isTV && index === 0 ? { hasTVPreferredFocus: true } : {})}
                       style={({ pressed }) => [
                         st.cwCard,
                         pressed && !isTV && { opacity: 0.85, transform: [{ scale: 0.97 }] },
@@ -383,9 +397,9 @@ export default function HomeScreen() {
                           </Text>
                         </View>
                       )}
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                    </TVPressable>
+                  )}
+                />
               </View>
             )}
             <ContentRow title="Popular Series" data={data.popularTv || []} type="tv" />
@@ -426,14 +440,22 @@ const st = StyleSheet.create({
     paddingTop: Layout.safeTop,
     paddingHorizontal: S.screen,
   },
-  logo: { width: 120, height: 32 },
-  logoTV: { width: 180, height: 48 },
+  logo: { width: 140, height: 38 },
+  logoTV: { width: 240, height: 64 },
   topIcons: { flexDirection: 'row', gap: 10 },
   topIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topIconBtnTV: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },

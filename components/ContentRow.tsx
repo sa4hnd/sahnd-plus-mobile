@@ -64,8 +64,14 @@ export default function ContentRow({ title, data, type }: Props) {
         renderItem={({ item, index }) => (
           <Card item={item} type={type || ''} isFirst={index === 0} />
         )}
-        snapToInterval={CARD_W + GAP}
-        decelerationRate="fast"
+        {...(!isTV ? {
+          snapToInterval: CARD_W + GAP,
+          decelerationRate: 'fast',
+        } : {
+          // TV: let focus-based scrolling work smoothly, no snapping
+          scrollEnabled: true,
+          removeClippedSubviews: false,
+        })}
       />
     </View>
   );

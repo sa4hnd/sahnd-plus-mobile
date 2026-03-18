@@ -1,35 +1,43 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Pressable, FlatList, StyleSheet,
-  ActivityIndicator, Animated, useWindowDimensions,
+  ActivityIndicator, Animated, useWindowDimensions, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, Play, Pause, Heart, Maximize, Minimize } from 'lucide-react-native';
 import { fetchChannels } from '@/lib/channels';
 import { toggleFavoriteChannel, isFavoriteChannel } from '@/lib/channelFavorites';
 import { C, S, isTV } from '@/lib/design';
 import { useTVRemote } from '@/lib/tv';
+import TVPressable from '@/components/TVPressable';
 import ChannelNumberInput from '@/components/ChannelNumberInput';
 import { Channel } from '@/types';
 
-const STRIP_LOGO = isTV ? 64 : 44;
-const CONTROLS_TIMEOUT = 5000;
+// Optional native modules — not available until next native build
+let ScreenOrientation: any = null;
+let NavigationBar: any = null;
+try { ScreenOrientation = require('expo-screen-orientation'); } catch {}
+try { NavigationBar = require('expo-navigation-bar'); } catch {}
 
-function StripItem({ item, isActive, onPress }: { item: Channel; isActive: boolean; onPress: () => void }) {
+const STRIP_LOGO = isTV ? 64 : 44;
+const CONTROLS_TIMEOUT = 15000;
+
+function StripItem({ item, isActive, onPress, disabled }: { item: Channel; isActive: boolean; onPress: () => void; disabled?: boolean }) {
   const [focused, setFocused] = useState(false);
   return (
-    <Pressable
-      onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+    <TVPressable
+      onPress={disabled ? undefined : onPress}
+      onFocus={(e) => { setFocused(true); }}
+      onBlur={(e) => { setFocused(false); }}
       style={[
         st.stripItem,
         isActive && st.stripItemActive,
-        focused && st.stripItemFocused,
+        focused && !disabled && st.stripItemFocused,
       ]}
     >
       {item.logo ? (
@@ -39,7 +47,7 @@ function StripItem({ item, isActive, onPress }: { item: Channel; isActive: boole
           <Text style={st.stripInitial}>{item.name.slice(0, 2)}</Text>
         </View>
       )}
-    </Pressable>
+    </TVPressable>
   );
 }
 
@@ -58,6 +66,25 @@ export default function ChannelPlayerScreen() {
 
   const controlsOpacity = useRef(new Animated.Value(1)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [stripEnabled, setStripEnabled] = useState(true);
+
+  // Hide status bar and navigation bar for immersive fullscreen
+  useEffect(() => {
+    if (Platform.OS === 'android' && NavigationBar) {
+      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
+    }
+    if (ScreenOrientation) ScreenOrientation.unlockAsync().catch(() => {});
+
+    return () => {
+      if (Platform.OS === 'android' && NavigationBar) {
+        NavigationBar.setVisibilityAsync('visible').catch(() => {});
+      }
+      if (ScreenOrientation) {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      }
+    };
+  }, []);
 
   const player = useVideoPlayer(
     channel ? { uri: channel.stream_url } : null,
@@ -130,8 +157,14 @@ export default function ChannelPlayerScreen() {
   };
 
   const showControlsBriefly = () => {
+    const wasHidden = !showControls;
     setShowControls(true);
     Animated.timing(controlsOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    // Block strip presses briefly so a stale-focused item doesn't fire on the "show controls" OK press
+    if (wasHidden) {
+      setStripEnabled(false);
+      setTimeout(() => { setStripEnabled(true); }, 400);
+    }
     startHideTimer();
   };
 
@@ -140,6 +173,7 @@ export default function ChannelPlayerScreen() {
       if (hideTimer.current) clearTimeout(hideTimer.current);
       Animated.timing(controlsOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
       setShowControls(false);
+      setStripEnabled(false);
     } else {
       showControlsBriefly();
     }
@@ -181,6 +215,7 @@ export default function ChannelPlayerScreen() {
 
   return (
     <View style={st.container}>
+      <StatusBar hidden />
       <ChannelNumberInput allChannels={allChannels} navigate={false} onSwitch={switchChannel} />
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
 
@@ -197,33 +232,31 @@ export default function ChannelPlayerScreen() {
           {/* Top bar */}
           <View style={[st.overlayTop, { paddingTop: isTV ? 24 : insets.top + 4 }]}>
             {!isTV && (
-              <Pressable onPress={() => router.back()} hitSlop={12} style={st.iconBtn}>
+              <TVPressable onPress={() => router.back()} hitSlop={12} style={st.iconBtn}>
                 <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
-              </Pressable>
+              </TVPressable>
             )}
             <Text style={st.channelName} numberOfLines={1}>
               {currentIndex >= 0 ? `${currentIndex + 1}. ` : ''}{channel.name}
             </Text>
             <View style={{ flexDirection: 'row', gap: 4 }}>
-              <Pressable onPress={() => { setFillScreen(f => !f); showControlsBriefly(); }} hitSlop={12} style={st.iconBtn}>
+              <TVPressable onPress={() => { setFillScreen(f => !f); showControlsBriefly(); }} hitSlop={12} style={st.iconBtn}>
                 {fillScreen
                   ? <Minimize size={isTV ? 24 : 18} color="#fff" strokeWidth={2} />
                   : <Maximize size={isTV ? 24 : 18} color="#fff" strokeWidth={2} />
                 }
-              </Pressable>
-              {!isTV && (
-                <Pressable onPress={toggleFav} hitSlop={12} style={st.iconBtn}>
-                  <Heart size={20} color={isFav ? C.accent : '#fff'} fill={isFav ? C.accent : 'transparent'} strokeWidth={2} />
-                </Pressable>
-              )}
+              </TVPressable>
+              <TVPressable onPress={toggleFav} hitSlop={12} style={st.iconBtn}>
+                <Heart size={isTV ? 24 : 20} color={isFav ? C.accent : '#fff'} fill={isFav ? C.accent : 'transparent'} strokeWidth={2} />
+              </TVPressable>
             </View>
           </View>
 
           {/* Center play/pause */}
           {paused && (
-            <Pressable onPress={togglePause} style={st.centerBtn}>
+            <TVPressable onPress={togglePause} style={st.centerBtn} {...(isTV ? { hasTVPreferredFocus: true } : {})}>
               <Play size={isTV ? 48 : 36} color="#fff" fill="#fff" />
-            </Pressable>
+            </TVPressable>
           )}
 
           {/* Bottom channel strip */}
@@ -250,6 +283,7 @@ export default function ChannelPlayerScreen() {
                   item={item}
                   isActive={item.id === channel.id}
                   onPress={() => switchChannel(item)}
+                  disabled={!stripEnabled}
                 />
               )}
             />
@@ -288,8 +322,8 @@ const st = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden', borderWidth: 2, borderColor: 'transparent',
   },
-  stripItemActive: { borderColor: C.accent },
-  stripItemFocused: { borderColor: '#fff', transform: [{ scale: 1.15 }] },
+  stripItemActive: { borderColor: '#FFD60A' },
+  stripItemFocused: { borderColor: '#FFD60A', transform: [{ scale: 1.15 }] },
   stripLogo: { width: '100%', height: '100%' },
   stripFallback: { justifyContent: 'center', alignItems: 'center' },
   stripInitial: { color: '#fff', fontSize: isTV ? 16 : 12, fontWeight: '700' },

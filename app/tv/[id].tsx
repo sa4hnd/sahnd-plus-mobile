@@ -7,7 +7,9 @@ import * as Haptics from 'expo-haptics';
 import { tvDetail, seasonDetail as fetchSeason, img, backdrop as bdrop } from '@/lib/tmdb';
 import { addToWatchlist, removeFromWatchlist, isInWatchlist, addToHistory } from '@/lib/storage';
 import { Colors, Spacing, Radius } from '@/lib/theme';
+import { isTV } from '@/lib/design';
 import ContentRow from '@/components/ContentRow';
+import TVPressable from '@/components/TVPressable';
 import { MovieDetail, Episode } from '@/types';
 
 const { width: W } = Dimensions.get('window');
@@ -67,9 +69,9 @@ export default function TVDetailScreen() {
         <View style={s.backdrop}>
           {bg && <Image source={{ uri: bg }} style={StyleSheet.absoluteFill} contentFit="cover" />}
           <LinearGradient colors={['transparent', Colors.bg]} style={[StyleSheet.absoluteFill, { top: '40%' }]} />
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
+          <TVPressable onPress={() => router.back()} style={s.backBtn}>
             <Text style={{ color: '#fff', fontSize: 20 }}>‹</Text>
-          </Pressable>
+          </TVPressable>
         </View>
 
         <View style={s.body}>
@@ -92,13 +94,17 @@ export default function TVDetailScreen() {
 
           {/* Actions */}
           <View style={s.actions}>
-            <Pressable onPress={() => playEpisode(episodes[0] || { season_number: 1, episode_number: 1 } as Episode)} style={({ pressed }) => [s.watchBtn, pressed && { opacity: 0.9 }]}>
+            <TVPressable
+              onPress={() => playEpisode(episodes[0] || { season_number: 1, episode_number: 1 } as Episode)}
+              {...(isTV ? { hasTVPreferredFocus: true } : {})}
+              style={({ pressed }) => [s.watchBtn, pressed && { opacity: 0.9 }]}
+            >
               <Text style={s.watchIcon}>▶</Text>
               <Text style={s.watchText}>Watch S1 E1</Text>
-            </Pressable>
-            <Pressable onPress={toggleWL} style={s.listBtn}>
+            </TVPressable>
+            <TVPressable onPress={toggleWL} style={s.listBtn}>
               <Text style={s.listBtnT}>{inList ? '✓' : '+'}</Text>
-            </Pressable>
+            </TVPressable>
           </View>
 
           <Text style={s.overview}>{show.overview}</Text>
@@ -107,7 +113,7 @@ export default function TVDetailScreen() {
           <Text style={s.secTitle}>Episodes</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8 }}>
             {seasons.map((ss: any) => (
-              <Pressable
+              <TVPressable
                 key={ss.season_number}
                 onPress={() => { Haptics.selectionAsync(); setSelectedSeason(ss.season_number); }}
                 style={[s.seasonPill, selectedSeason === ss.season_number && s.seasonActive]}
@@ -115,7 +121,7 @@ export default function TVDetailScreen() {
                 <Text style={[s.seasonText, selectedSeason === ss.season_number && s.seasonTextActive]}>
                   S{ss.season_number}
                 </Text>
-              </Pressable>
+              </TVPressable>
             ))}
           </ScrollView>
 
@@ -126,7 +132,7 @@ export default function TVDetailScreen() {
             </View>
           ) : (
             episodes.map(ep => (
-              <Pressable key={ep.id} onPress={() => playEpisode(ep)} style={({ pressed }) => [s.epRow, pressed && { opacity: 0.7 }]}>
+              <TVPressable key={ep.id} onPress={() => playEpisode(ep)} style={({ pressed }) => [s.epRow, pressed && { opacity: 0.7 }]}>
                 <View style={s.epThumb}>
                   {ep.still_path ? (
                     <Image source={{ uri: img(ep.still_path, 'w300')! }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
@@ -146,7 +152,7 @@ export default function TVDetailScreen() {
                   </Text>
                   <Text style={s.epDesc} numberOfLines={2}>{ep.overview}</Text>
                 </View>
-              </Pressable>
+              </TVPressable>
             ))
           )}
 
