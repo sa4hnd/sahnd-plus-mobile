@@ -58,10 +58,13 @@ const config = {
       ["expo-build-properties", {
         android: {
           usesCleartextTraffic: true,
-          extraProguardRules: "-keep class ** { *; }",
+          ...(IS_TV ? { buildArchs: ["armeabi-v7a", "arm64-v8a"] } : {}),
         }
       }],
-      ...(IS_TV ? [["@react-native-tvos/config-tv", { isTV: true }]] : [])
+      ...(IS_TV ? [
+        ["./plugins/withAbiFilters", { abiFilters: ["armeabi-v7a", "arm64-v8a"] }],
+        ["@react-native-tvos/config-tv", { isTV: true }],
+      ] : [])
     ],
     experiments: {
       typedRoutes: true
