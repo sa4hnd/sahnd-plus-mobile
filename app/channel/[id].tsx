@@ -203,12 +203,17 @@ export default function ChannelPlayerScreen() {
               showsHorizontalScrollIndicator={false}
               keyExtractor={(ch) => ch.id}
               contentContainerStyle={{ paddingHorizontal: S.screen, gap: isTV ? 16 : 10 }}
-              initialScrollIndex={Math.max(0, currentIndex)}
-              getItemLayout={(_, index) => ({
-                length: STRIP_LOGO + (isTV ? 16 : 10),
-                offset: (STRIP_LOGO + (isTV ? 16 : 10)) * index,
-                index,
-              })}
+              initialNumToRender={20}
+              maxToRenderPerBatch={30}
+              windowSize={5}
+              {...(currentIndex > 0 && allChannels.length > 0 ? {
+                initialScrollIndex: currentIndex,
+                getItemLayout: (_, index) => ({
+                  length: STRIP_LOGO + (isTV ? 16 : 10),
+                  offset: (STRIP_LOGO + (isTV ? 16 : 10)) * index,
+                  index,
+                }),
+              } : {})}
               renderItem={({ item }) => {
                 const isActive = item.id === channel.id;
                 return (
