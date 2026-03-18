@@ -55,7 +55,12 @@ const config = {
       "expo-router",
       "expo-video",
       "react-native-video",
-      ["expo-build-properties", { android: { usesCleartextTraffic: true } }],
+      ["expo-build-properties", {
+        android: {
+          usesCleartextTraffic: true,
+          extraProguardRules: "-keep class ** { *; }",
+        }
+      }],
       ...(IS_TV ? [["@react-native-tvos/config-tv", { isTV: true }]] : [])
     ],
     experiments: {

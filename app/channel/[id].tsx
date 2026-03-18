@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Play, Pause, Heart } from 'lucide-react-native';
+import { ChevronLeft, Play, Pause, Heart, Maximize, Minimize } from 'lucide-react-native';
 import { fetchChannels } from '@/lib/channels';
 import { toggleFavoriteChannel, isFavoriteChannel } from '@/lib/channelFavorites';
 import { C, S, isTV } from '@/lib/design';
@@ -27,8 +27,9 @@ export default function ChannelPlayerScreen() {
   const [allChannels, setAllChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
-  const [showControls, setShowControls] = useState(isTV); // Always show on TV
+  const [showControls, setShowControls] = useState(isTV);
   const [isFav, setIsFav] = useState(false);
+  const [fillScreen, setFillScreen] = useState(false);
   const { width: screenW, height: screenH } = useWindowDimensions();
 
   const controlsOpacity = useRef(new Animated.Value(isTV ? 1 : 0)).current;
@@ -60,7 +61,6 @@ export default function ChannelPlayerScreen() {
     }).catch(() => setLoading(false));
   }, [id]);
 
-  // TV Remote controls
   useTVRemote({
     onSelect: () => {
       if (paused) { player.play(); } else { player.pause(); }
@@ -78,20 +78,19 @@ export default function ChannelPlayerScreen() {
       const idx = channel ? allChannels.findIndex(ch => ch.id === channel.id) : -1;
       if (idx >= 0 && idx < allChannels.length - 1) switchChannel(allChannels[idx + 1]);
     },
-    onBack: () => {
-      router.back();
-    },
+    onUp: () => setFillScreen(f => !f),
+    onBack: () => router.back(),
   });
 
   const hideControlsNow = () => {
-    if (isTV) return; // Never hide on TV
+    if (isTV) return;
     if (hideTimer.current) clearTimeout(hideTimer.current);
     Animated.timing(controlsOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     setShowControls(false);
   };
 
   const toggleControls = () => {
-    if (isTV) return; // Always visible on TV
+    if (isTV) return;
     if (hideTimer.current) clearTimeout(hideTimer.current);
     if (showControls) {
       hideControlsNow();
@@ -144,47 +143,48 @@ export default function ChannelPlayerScreen() {
       <ChannelNumberInput allChannels={allChannels} navigate={false} onSwitch={switchChannel} />
       <Stack.Screen options={{ headerShown: false, orientation: 'all' }} />
 
-      <Pressable style={st.playerArea} onPress={toggleControls}>
-        {/* Video — properly sized for portrait and landscape */}
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {(() => {
-            const isLandscape = screenW > screenH;
-            const videoW = isLandscape ? screenH * (16 / 9) : screenW;
-            const videoH = isLandscape ? screenH : screenW * (9 / 16);
-            return (
-              <VideoView
-                player={player}
-                style={{ width: Math.min(videoW, screenW), height: Math.min(videoH, screenH) }}
-                contentFit="contain"
-                nativeControls={false}
-              />
-            );
-          })()}
-        </View>
+      {/* Video fills entire screen, tap overlay on top */}
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit={fillScreen ? 'cover' : 'contain'}
+        nativeControls={false}
+      />
 
-        {/* Controls overlay */}
+      {/* Tap area covers entire screen */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={toggleControls}>
         <Animated.View style={[st.overlay, { opacity: controlsOpacity }]} pointerEvents={showControls ? 'auto' : 'none'}>
-          {/* Top */}
+          {/* Top bar */}
           <View style={[st.overlayTop, { paddingTop: isTV ? 24 : insets.top + 4 }]}>
             {!isTV && (
               <Pressable onPress={() => router.back()} hitSlop={12} style={st.iconBtn}>
                 <ChevronLeft size={24} color="#fff" strokeWidth={2.5} />
               </Pressable>
             )}
-            <Text style={st.channelName} numberOfLines={1}>{channel.name}</Text>
-            {!isTV && (
-              <Pressable onPress={toggleFav} hitSlop={12} style={st.iconBtn}>
-                <Heart
-                  size={20}
-                  color={isFav ? C.accent : '#fff'}
-                  fill={isFav ? C.accent : 'transparent'}
-                  strokeWidth={2}
-                />
+            <Text style={st.channelName} numberOfLines={1}>
+              {currentIndex >= 0 ? `${currentIndex + 1}. ` : ''}{channel.name}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              <Pressable onPress={() => setFillScreen(f => !f)} hitSlop={12} style={st.iconBtn}>
+                {fillScreen
+                  ? <Minimize size={isTV ? 24 : 18} color="#fff" strokeWidth={2} />
+                  : <Maximize size={isTV ? 24 : 18} color="#fff" strokeWidth={2} />
+                }
               </Pressable>
-            )}
+              {!isTV && (
+                <Pressable onPress={toggleFav} hitSlop={12} style={st.iconBtn}>
+                  <Heart
+                    size={20}
+                    color={isFav ? C.accent : '#fff'}
+                    fill={isFav ? C.accent : 'transparent'}
+                    strokeWidth={2}
+                  />
+                </Pressable>
+              )}
+            </View>
           </View>
 
-          {/* Center play/pause — only on mobile or when paused on TV */}
+          {/* Center play/pause */}
           {(!isTV || paused) && (
             <Pressable onPress={togglePause} style={st.centerBtn}>
               {paused ? (
@@ -195,7 +195,7 @@ export default function ChannelPlayerScreen() {
             </Pressable>
           )}
 
-          {/* Bottom: channel strip — always visible on TV */}
+          {/* Bottom channel strip */}
           <View style={[st.overlayBottom, { paddingBottom: isTV ? 24 : insets.bottom || 12 }]}>
             <FlatList
               data={allChannels}
@@ -215,7 +215,7 @@ export default function ChannelPlayerScreen() {
                   <Pressable onPress={() => switchChannel(item)}>
                     <View style={[st.stripItem, isActive && st.stripItemActive]}>
                       {item.logo ? (
-                        <Image source={{ uri: item.logo }} style={st.stripLogo} contentFit="contain" />
+                        <Image source={{ uri: item.logo }} style={st.stripLogo} contentFit="contain" cachePolicy="memory-disk" />
                       ) : (
                         <View style={[st.stripLogo, st.stripFallback]}>
                           <Text style={st.stripInitial}>{item.name.slice(0, 2)}</Text>
@@ -236,8 +236,6 @@ export default function ChannelPlayerScreen() {
 const st = StyleSheet.create({
   center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   container: { flex: 1, backgroundColor: '#000' },
-
-  playerArea: { flex: 1 },
 
   overlay: {
     ...StyleSheet.absoluteFillObject,

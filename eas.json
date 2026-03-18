@@ -34,7 +34,8 @@
         "credentialsSource": "local"
       },
       "env": {
-        "EXPO_TV": "1"
+        "EXPO_TV": "1",
+        "EAS_NO_ABI_FILTERING": "true"
       }
     },
     "production": {
